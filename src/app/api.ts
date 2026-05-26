@@ -104,3 +104,16 @@ export function submitImageDocument(input: { base64: string; mimeType: string; t
     body: JSON.stringify(input),
   });
 }
+
+export function submitPdfDocuments(input: {
+  documents: Array<{ base64: string; originalFileName: string }>;
+  tripId: string | null;
+}): Promise<{
+  documents: unknown[];
+  bookings: Booking[];
+}> {
+  return requestJson("/api/documents/pdf", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

@@ -18,6 +18,9 @@ function createStorage(): DocumentStorageProvider & { storedCount: number } {
         mimeType: "image/png",
       };
     },
+    async storePdfDocument() {
+      throw new Error("not used");
+    },
   };
 }
 
@@ -41,6 +44,9 @@ const analyzer: BookingAnalysisProvider = {
         extractedJson: { test: true },
       },
     ];
+  },
+  async analyzePdf() {
+    throw new Error("not used");
   },
 };
 
@@ -77,6 +83,9 @@ describe("submitImageDocument", () => {
       async analyzeImage() {
         return [];
       },
+      async analyzePdf() {
+        throw new Error("not used");
+      },
     };
 
     const result = await submitImageDocument(state, storage, emptyAnalyzer, {
@@ -97,6 +106,9 @@ describe("submitImageDocument", () => {
       },
       async analyzeImage() {
         throw new Error("vision down");
+      },
+      async analyzePdf() {
+        throw new Error("not used");
       },
     };
 

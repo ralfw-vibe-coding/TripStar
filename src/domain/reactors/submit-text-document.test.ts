@@ -18,6 +18,9 @@ function createStorage(): DocumentStorageProvider & { storedCount: number } {
     async storeBase64Document() {
       throw new Error("not used");
     },
+    async storePdfDocument() {
+      throw new Error("not used");
+    },
   };
 }
 
@@ -40,6 +43,9 @@ const analyzer: BookingAnalysisProvider = {
     ];
   },
   async analyzeImage() {
+    throw new Error("not used");
+  },
+  async analyzePdf() {
     throw new Error("not used");
   },
 };
@@ -86,6 +92,9 @@ describe("submitTextDocument", () => {
       async analyzeImage() {
         throw new Error("not used");
       },
+      async analyzePdf() {
+        throw new Error("not used");
+      },
     };
 
     const result = await submitTextDocument(state, storage, emptyAnalyzer, {
@@ -106,6 +115,9 @@ describe("submitTextDocument", () => {
         throw new Error("analysis down");
       },
       async analyzeImage() {
+        throw new Error("not used");
+      },
+      async analyzePdf() {
         throw new Error("not used");
       },
     };

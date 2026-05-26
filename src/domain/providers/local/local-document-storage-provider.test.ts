@@ -39,4 +39,21 @@ describe("LocalDocumentStorageProvider", () => {
     expect(stored.storageKey).toMatch(/^documents\/images\/.+\.png$/);
     await expect(readFile(join(storageDir, stored.storageKey), "utf8")).resolves.toBe("image bytes");
   });
+
+  it("stores PDF documents below the configured storage directory", async () => {
+    const storageDir = await mkdtemp(join(tmpdir(), "tripstar-pdfs-"));
+    const provider = new LocalDocumentStorageProvider(storageDir);
+
+    const stored = await provider.storePdfDocument({
+      base64: Buffer.from("%PDF").toString("base64"),
+      originalFileName: "booking.pdf",
+    });
+
+    expect(stored).toMatchObject({
+      originalFileName: "booking.pdf",
+      mimeType: "application/pdf",
+    });
+    expect(stored.storageKey).toMatch(/^documents\/pdfs\/.+\.pdf$/);
+    await expect(readFile(join(storageDir, stored.storageKey), "utf8")).resolves.toBe("%PDF");
+  });
 });

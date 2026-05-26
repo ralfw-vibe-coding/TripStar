@@ -32,6 +32,19 @@ export class LocalDocumentStorageProvider implements DocumentStorageProvider {
       mimeType: input.mimeType,
     };
   }
+
+  async storePdfDocument(input: { base64: string; originalFileName: string }): Promise<StoredDocument> {
+    await mkdir(this.storageDir, { recursive: true });
+    const storageKey = `documents/pdfs/${randomUUID()}.pdf`;
+    const path = join(this.storageDir, storageKey);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, Buffer.from(input.base64, "base64"));
+    return {
+      storageKey,
+      originalFileName: input.originalFileName,
+      mimeType: "application/pdf",
+    };
+  }
 }
 
 function extensionForMimeType(mimeType: string): string {

@@ -13,7 +13,7 @@ import {
   UserRoundCheck,
   X,
 } from "lucide-react";
-import { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityLogEntry, CalendarBooking, CalendarView, Trip, User } from "../domain/model";
 import {
   assignBookingTrip,
@@ -27,6 +27,7 @@ import {
   requestOtp,
   storeAuthToken,
   submitImageDocument,
+  submitPdfDocuments,
   submitTextDocument,
   updateProfile,
   verifyOtp,
@@ -696,6 +697,9 @@ function TextDocumentDialog({
 }) {
   const [text, setText] = useState("");
   const [tripId, setTripId] = useState("");
+  const [inputMode, setInputMode] = useState<"upload" | "manual">("upload");
+  const [pdfFiles, setPdfFiles] = useState<Array<{ name: string; base64: string }>>([]);
+  const [isPdfDragActive, setIsPdfDragActive] = useState(false);
   const [screenshot, setScreenshot] = useState<{ dataUrl: string; base64: string; mimeType: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -703,8 +707,8 @@ function TextDocumentDialog({
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
-    textAreaRef.current?.focus();
-  }, []);
+    if (inputMode === "manual") textAreaRef.current?.focus();
+  }, [inputMode]);
 
   function handleDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape" && !isSubmitting) {
@@ -720,7 +724,12 @@ function TextDocumentDialog({
     setIsSubmitting(true);
     try {
       const result =
-        screenshot !== null
+        inputMode === "upload"
+          ? await submitPdfDocuments({
+              documents: pdfFiles.map((file) => ({ base64: file.base64, originalFileName: file.name })),
+              tripId: tripId || null,
+            })
+          : screenshot !== null
           ? await submitImageDocument({
               base64: screenshot?.base64 ?? "",
               mimeType: screenshot?.mimeType ?? "",
@@ -754,13 +763,34 @@ function TextDocumentDialog({
     setScreenshot(await imageBlobToPayload(file));
   }
 
+  async function handlePdfFilesChange(event: ChangeEvent<HTMLInputElement>) {
+    await acceptPdfFiles(Array.from(event.currentTarget.files ?? []));
+  }
+
+  async function acceptPdfFiles(files: File[]) {
+    setError(null);
+    setNotice(null);
+    if (files.some((file) => file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"))) {
+      setError("Only PDF documents are accepted.");
+      setPdfFiles([]);
+      return;
+    }
+    setPdfFiles(await Promise.all(files.map(pdfFileToPayload)));
+  }
+
+  async function handlePdfDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setIsPdfDragActive(false);
+    await acceptPdfFiles(Array.from(event.dataTransfer.files));
+  }
+
   return (
     <div className="modal-backdrop" role="presentation" onKeyDown={handleDialogKeyDown}>
       <form className="document-dialog" onSubmit={handleSubmit}>
         <header className="dialog-header">
           <div>
             <h2>Add document</h2>
-            <p>Text or clipboard images are analyzed first and stored when bookings are found.</p>
+            <p>Upload PDFs or analyze pasted text and clipboard images.</p>
           </div>
           <button className="icon-command" type="button" aria-label="Close" onClick={onClose} disabled={isSubmitting}>
             <X size={18} />
@@ -768,13 +798,27 @@ function TextDocumentDialog({
         </header>
 
         <div className="mode-switch" role="tablist" aria-label="Document input">
-          <button type="button" role="tab" aria-selected="true" className="active" disabled={isSubmitting}>
-            <FileUp size={16} />
-            Text or clipboard
-          </button>
-          <button type="button" role="tab" aria-selected="false" disabled>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={inputMode === "upload"}
+            className={inputMode === "upload" ? "active" : ""}
+            onClick={() => setInputMode("upload")}
+            disabled={isSubmitting}
+          >
             <ImageIcon size={16} />
             Upload
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={inputMode === "manual"}
+            className={inputMode === "manual" ? "active" : ""}
+            onClick={() => setInputMode("manual")}
+            disabled={isSubmitting}
+          >
+            <FileUp size={16} />
+            Text or clipboard
           </button>
         </div>
 
@@ -790,7 +834,29 @@ function TextDocumentDialog({
           </select>
         </label>
 
-        {screenshot ? (
+        {inputMode === "upload" ? (
+          <label
+            className={`pdf-dropzone ${isPdfDragActive ? "active" : ""}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsPdfDragActive(true);
+            }}
+            onDragLeave={() => setIsPdfDragActive(false)}
+            onDrop={handlePdfDrop}
+          >
+            <input type="file" accept=".pdf,application/pdf" multiple onChange={handlePdfFilesChange} disabled={isSubmitting} />
+            <FileUp size={34} aria-hidden="true" />
+            <strong>Drop PDF documents here</strong>
+            <span>or click to choose one or more files</span>
+            {pdfFiles.length > 0 && (
+              <div className="pdf-file-list">
+                {pdfFiles.map((file) => (
+                  <span key={file.name}>{file.name}</span>
+                ))}
+              </div>
+            )}
+          </label>
+        ) : screenshot ? (
           <div className="field-label">
             Clipboard image
             <div className="screenshot-preview">
@@ -834,7 +900,11 @@ function TextDocumentDialog({
             <X size={16} />
             Cancel
           </button>
-          <button type="submit" className="primary-button" disabled={isSubmitting || (!text.trim() && !screenshot)}>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={isSubmitting || (inputMode === "upload" ? pdfFiles.length === 0 : !text.trim() && !screenshot)}
+          >
             {isSubmitting ? <LoaderCircle className="button-spinner" size={16} aria-hidden="true" /> : <Check size={16} />}
             {isSubmitting ? "Analyzing" : "Analyze"}
           </button>
@@ -856,6 +926,17 @@ async function imageBlobToPayload(blob: Blob): Promise<{ dataUrl: string; base64
   });
   const [, base64 = ""] = dataUrl.split(",", 2);
   return { dataUrl, base64, mimeType: blob.type };
+}
+
+async function pdfFileToPayload(file: File): Promise<{ name: string; base64: string }> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read PDF document."));
+    reader.readAsDataURL(file);
+  });
+  const [, base64 = ""] = dataUrl.split(",", 2);
+  return { name: file.name, base64 };
 }
 
 function TripDialog({

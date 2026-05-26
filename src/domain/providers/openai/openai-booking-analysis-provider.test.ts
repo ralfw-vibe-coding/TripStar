@@ -68,4 +68,24 @@ describe("OpenAIBookingAnalysisProvider", () => {
       ]),
     );
   });
+
+  it("sends PDFs as file inputs", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ output_text: JSON.stringify({ bookings: [] }) }), { status: 200 }),
+    );
+    const provider = new OpenAIBookingAnalysisProvider("sk-test", "gpt-test", () => new Date("2026-05-26T12:00:00.000Z"));
+
+    await provider.analyzePdf({ base64: "JVBERi0=", originalFileName: "booking.pdf" });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.input[1].content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "input_file",
+          filename: "booking.pdf",
+          file_data: "data:application/pdf;base64,JVBERi0=",
+        }),
+      ]),
+    );
+  });
 });

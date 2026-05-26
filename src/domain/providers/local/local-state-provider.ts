@@ -389,7 +389,6 @@ export class LocalStateProvider implements TripStarStateProvider {
     const trips = await this.listTrips();
     const tripById = new Map(trips.map((trip) => [trip.id, trip]));
     const bookings = (await this.listBookings())
-      .filter((booking) => booking.tripId === null || booking.startAt === null || new Date(booking.startAt) >= this.startOfDay(now))
       .sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? ""))
       .map<CalendarBooking>((booking) => {
         const trip = booking.tripId ? tripById.get(booking.tripId) ?? null : null;

@@ -7,6 +7,7 @@ import { LocalDocumentStorageProvider } from "../domain/providers/local/local-do
 import { OpenAIBookingAnalysisProvider } from "../domain/providers/openai/openai-booking-analysis-provider";
 import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../domain/providers/state-provider";
 import { submitImageDocument } from "../domain/reactors/submit-image-document";
+import { submitPdfDocuments } from "../domain/reactors/submit-pdf-documents";
 import { submitTextDocument } from "../domain/reactors/submit-text-document";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
@@ -111,6 +112,21 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         await submitImageDocument(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
           base64: body.base64,
           mimeType: body.mimeType,
+          tripId: body.tripId,
+        }),
+        { status: 201 },
+      );
+    }
+
+    if (segments[0] === "documents" && segments.length === 2 && segments[1] === "pdf" && request.method === "POST") {
+      const user = await getCurrentUser(provider, bearerToken(request));
+      if (!user) {
+        return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      }
+      const body = await readJson<{ documents: Array<{ base64: string; originalFileName: string }>; tripId: string | null }>(request);
+      return jsonResponse(
+        await submitPdfDocuments(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
+          documents: body.documents,
           tripId: body.tripId,
         }),
         { status: 201 },

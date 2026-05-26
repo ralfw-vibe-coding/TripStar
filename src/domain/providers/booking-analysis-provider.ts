@@ -17,4 +17,5 @@ export interface AnalyzedBookingInput {
 export interface BookingAnalysisProvider {
   analyzeText(text: string): Promise<AnalyzedBookingInput[]>;
   analyzeImage(input: { base64: string; mimeType: string }): Promise<AnalyzedBookingInput[]>;
+  analyzePdf(input: { base64: string; originalFileName: string }): Promise<AnalyzedBookingInput[]>;
 }

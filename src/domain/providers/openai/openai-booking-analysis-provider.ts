@@ -48,6 +48,24 @@ export class OpenAIBookingAnalysisProvider implements BookingAnalysisProvider {
     ]);
   }
 
+  async analyzePdf(input: { base64: string; originalFileName: string }): Promise<AnalyzedBookingInput[]> {
+    if (!input.base64.trim()) {
+      return [];
+    }
+
+    return this.createAnalysis([
+      {
+        type: "input_file",
+        filename: input.originalFileName,
+        file_data: `data:application/pdf;base64,${input.base64}`,
+      },
+      {
+        type: "input_text",
+        text: "Extract travel bookings from this PDF document. Read invoices, confirmations, receipts, and visible page content carefully.",
+      },
+    ]);
+  }
+
   private async createAnalysis(content: Array<Record<string, unknown>>): Promise<AnalyzedBookingInput[]> {
     const currentYear = this.now().getFullYear();
     const response = await fetch("https://api.openai.com/v1/responses", {

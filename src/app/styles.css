@@ -653,6 +653,63 @@ textarea:disabled {
   background: #ffffff;
 }
 
+.pdf-dropzone {
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 22px;
+  border: 1px dashed #8fb8aa;
+  border-radius: 8px;
+  background: #f7fbf9;
+  color: #0d5c4c;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pdf-dropzone.active {
+  border-color: #174ea6;
+  background: #eff6ff;
+  color: #174ea6;
+}
+
+.pdf-dropzone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pdf-dropzone strong,
+.pdf-dropzone span {
+  display: block;
+}
+
+.pdf-dropzone span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.pdf-file-list {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #dbe2e7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.pdf-file-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #18212f;
+  font-size: 13px;
+}
+
 .paste-button {
   justify-self: start;
 }
