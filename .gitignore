@@ -1,0 +1,10 @@
+.DS_Store
+node_modules/
+dist/
+.netlify/
+coverage/
+.tripstar/
+data/
+.env
+.env.*
+!.env.example
