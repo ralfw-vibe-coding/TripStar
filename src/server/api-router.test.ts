@@ -61,6 +61,66 @@ describe("API router", () => {
     expect(body.bookings.length).toBe(1);
   });
 
+  it("supports local OTP login and current user lookup", async () => {
+    const otpResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/request-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ralf@example.com" }),
+      }),
+    );
+    const otpBody = await otpResponse.json();
+    const verifyResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ralf@example.com", otp: otpBody.devOtp }),
+      }),
+    );
+    const verifyBody = await verifyResponse.json();
+    const meResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/me", {
+        headers: { authorization: `Bearer ${verifyBody.session.token}` },
+      }),
+    );
+
+    expect(otpResponse.status).toBe(200);
+    expect(verifyResponse.status).toBe(200);
+    await expect(meResponse.json()).resolves.toMatchObject({ user: { email: "ralf@example.com" } });
+  });
+
+  it("updates the current user's profile", async () => {
+    const otpResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/request-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "profile@example.com" }),
+      }),
+    );
+    const otpBody = await otpResponse.json();
+    const verifyResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "profile@example.com", otp: otpBody.devOtp }),
+      }),
+    );
+    const verifyBody = await verifyResponse.json();
+    const profileResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/profile", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${verifyBody.session.token}`,
+        },
+        body: JSON.stringify({ shortCode: "pf" }),
+      }),
+    );
+
+    expect(profileResponse.status).toBe(200);
+    await expect(profileResponse.json()).resolves.toMatchObject({ user: { shortCode: "PF" } });
+  });
+
   it("creates trips through POST /api/trips", async () => {
     const response = await handleApiRequest(
       new Request("http://localhost/api/trips", {

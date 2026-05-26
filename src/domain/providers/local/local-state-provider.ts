@@ -1,9 +1,29 @@
-import type { ActivityLogEntry, Booking, CalendarBooking, CalendarView, DocumentRecord, Id, Trip, User } from "../../model";
-import type { CreateTripInput, TripStarStateProvider, UpdateBookingInput, UpdateTripInput } from "../state-provider";
+import type {
+  ActivityLogEntry,
+  AuthSession,
+  Booking,
+  CalendarBooking,
+  CalendarView,
+  DocumentRecord,
+  Id,
+  OtpChallenge,
+  Trip,
+  User,
+} from "../../model";
+import type {
+  CreateTripInput,
+  RequestOtpResult,
+  TripStarStateProvider,
+  UpdateUserProfileInput,
+  UpdateBookingInput,
+  UpdateTripInput,
+  VerifyOtpResult,
+} from "../state-provider";
 import { createId } from "./id";
 import { seedBookings, seedDocuments, seedTrips, seedUsers } from "./seed";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
 
 interface LocalStateProviderOptions {
   users?: User[];
@@ -11,6 +31,8 @@ interface LocalStateProviderOptions {
   bookings?: Booking[];
   documents?: DocumentRecord[];
   activity?: ActivityLogEntry[];
+  otpChallenges?: OtpChallenge[];
+  authSessions?: AuthSession[];
   initialTripNumber?: number;
   now?: () => Date;
   stateFilePath?: string;
@@ -22,6 +44,8 @@ interface PersistedLocalState {
   bookings: Booking[];
   documents: DocumentRecord[];
   activity: ActivityLogEntry[];
+  otpChallenges?: OtpChallenge[];
+  authSessions?: AuthSession[];
 }
 
 function clone<T>(value: T): T {
@@ -38,6 +62,8 @@ export class LocalStateProvider implements TripStarStateProvider {
   private bookings: Booking[];
   private documents: DocumentRecord[];
   private activity: ActivityLogEntry[] = [];
+  private otpChallenges: OtpChallenge[] = [];
+  private authSessions: AuthSession[] = [];
   private now: () => Date;
   private stateFilePath: string | null;
   private initialTripNumber: number;
@@ -49,6 +75,8 @@ export class LocalStateProvider implements TripStarStateProvider {
     this.bookings = clone(options.bookings ?? persisted?.bookings ?? seedBookings);
     this.documents = clone(options.documents ?? persisted?.documents ?? seedDocuments);
     this.activity = clone(options.activity ?? persisted?.activity ?? []);
+    this.otpChallenges = clone(options.otpChallenges ?? persisted?.otpChallenges ?? []);
+    this.authSessions = clone(options.authSessions ?? persisted?.authSessions ?? []);
     this.now = options.now ?? (() => new Date());
     this.stateFilePath = options.stateFilePath ?? null;
     this.initialTripNumber = options.initialTripNumber ?? 200;
@@ -56,6 +84,108 @@ export class LocalStateProvider implements TripStarStateProvider {
 
   async listUsers(): Promise<User[]> {
     return clone(this.users);
+  }
+
+  async updateUserProfile(userId: Id, input: UpdateUserProfileInput): Promise<User> {
+    const user = this.users.find((candidate) => candidate.id === userId);
+    if (!user) {
+      throw new Error(`User not found: ${userId}`);
+    }
+
+    user.shortCode = normalizeUserShortCode(input.shortCode);
+    user.updatedAt = isoDate(this.now());
+    await this.appendActivity({
+      level: "info",
+      scope: "profile",
+      message: "Updated user profile",
+      documentName: null,
+      details: { userId },
+    });
+    this.persist();
+    return clone(user);
+  }
+
+  async requestLoginOtp(emailInput: string): Promise<RequestOtpResult> {
+    const email = normalizeEmail(emailInput);
+    const timestamp = this.now();
+    const expiresAt = new Date(timestamp.getTime() + 5 * 60 * 1000).toISOString();
+    const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const challenge: OtpChallenge = {
+      id: createId("otp"),
+      email,
+      otp,
+      expiresAt,
+      consumedAt: null,
+      createdAt: timestamp.toISOString(),
+    };
+
+    this.otpChallenges.push(challenge);
+    await this.appendActivity({
+      level: "info",
+      scope: "auth",
+      message: "Requested login OTP",
+      documentName: null,
+      details: { email },
+    });
+    this.persist();
+    return { email, expiresAt, devOtp: otp };
+  }
+
+  async verifyLoginOtp(emailInput: string, otp: string): Promise<VerifyOtpResult> {
+    const email = normalizeEmail(emailInput);
+    const now = this.now();
+    const challenge = [...this.otpChallenges]
+      .reverse()
+      .find((candidate) => candidate.email === email && candidate.consumedAt === null);
+
+    if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
+      throw new Error("Invalid or expired OTP.");
+    }
+
+    challenge.consumedAt = now.toISOString();
+    const user = this.findOrCreateUser(email, now);
+    const session: AuthSession = {
+      token: this.createSessionToken(),
+      userId: user.id,
+      expiresAt: new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000).toISOString(),
+      createdAt: now.toISOString(),
+      revokedAt: null,
+    };
+
+    this.authSessions.push(session);
+    await this.appendActivity({
+      level: "info",
+      scope: "auth",
+      message: "Verified login OTP",
+      documentName: null,
+      details: { userId: user.id },
+    });
+    this.persist();
+    return { user: clone(user), session: clone(session) };
+  }
+
+  async getAuthSession(token: string): Promise<VerifyOtpResult | null> {
+    const session = this.authSessions.find(
+      (candidate) => candidate.token === token && candidate.revokedAt === null && new Date(candidate.expiresAt) >= this.now(),
+    );
+    if (!session) {
+      return null;
+    }
+
+    const user = this.users.find((candidate) => candidate.id === session.userId);
+    if (!user) {
+      return null;
+    }
+
+    return { user: clone(user), session: clone(session) };
+  }
+
+  async revokeAuthSession(token: string): Promise<void> {
+    const session = this.authSessions.find((candidate) => candidate.token === token && candidate.revokedAt === null);
+    if (session) {
+      session.revokedAt = isoDate(this.now());
+      this.persist();
+    }
   }
 
   async listTrips(): Promise<Trip[]> {
@@ -288,7 +418,9 @@ export class LocalStateProvider implements TripStarStateProvider {
       return;
     }
 
-    mkdirSync(dirname(this.stateFilePath), { recursive: true });
+    const stateDir = dirname(this.stateFilePath);
+    mkdirSync(stateDir, { recursive: true });
+    this.backupCurrentState();
     writeFileSync(
       this.stateFilePath,
       JSON.stringify(
@@ -298,10 +430,67 @@ export class LocalStateProvider implements TripStarStateProvider {
           bookings: this.bookings,
           documents: this.documents,
           activity: this.activity,
+          otpChallenges: this.otpChallenges,
+          authSessions: this.authSessions,
         },
         null,
         2,
       ),
     );
   }
+
+  private backupCurrentState(): void {
+    if (!this.stateFilePath || !existsSync(this.stateFilePath)) {
+      return;
+    }
+
+    const backupDir = join(dirname(dirname(this.stateFilePath)), "backups");
+    mkdirSync(backupDir, { recursive: true });
+    const timestamp = this.now().toISOString().replace(/[:.]/g, "-");
+    copyFileSync(this.stateFilePath, join(backupDir, `tripstar-state.${timestamp}.json`));
+  }
+
+  private findOrCreateUser(email: string, now: Date): User {
+    const existingUser = this.users.find((candidate) => candidate.email === email);
+    if (existingUser) {
+      return existingUser;
+    }
+
+    const timestamp = now.toISOString();
+    const user: User = {
+      id: `user_${randomUUID()}`,
+      email,
+      shortCode: userShortCode(email),
+      displayName: email.split("@")[0] || email,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    this.users.push(user);
+    return user;
+  }
+
+  private createSessionToken(): string {
+    return randomBytes(32).toString("base64url");
+  }
+}
+
+function normalizeEmail(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new Error("A valid email address is required.");
+  }
+  return normalized;
+}
+
+function userShortCode(email: string): string {
+  const localPart = email.split("@")[0] ?? "";
+  return normalizeUserShortCode(localPart);
+}
+
+function normalizeUserShortCode(shortCode: string): string {
+  const letters = shortCode.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3).toUpperCase();
+  if (!letters) {
+    throw new Error("Profile code is required.");
+  }
+  return letters;
 }

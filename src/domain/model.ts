@@ -22,6 +22,23 @@ export interface User {
   updatedAt: string;
 }
 
+export interface OtpChallenge {
+  id: Id;
+  email: string;
+  otp: string;
+  expiresAt: string;
+  consumedAt: string | null;
+  createdAt: string;
+}
+
+export interface AuthSession {
+  token: string;
+  userId: Id;
+  expiresAt: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
 export interface DailyAllowance {
   date: string;
   country: string;

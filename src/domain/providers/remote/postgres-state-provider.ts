@@ -1,10 +1,38 @@
 import type { ActivityLogEntry, Booking, CalendarView, DocumentRecord, Id, Trip, User } from "../../model";
-import type { CreateTripInput, TripStarStateProvider, UpdateBookingInput, UpdateTripInput } from "../state-provider";
+import type {
+  CreateTripInput,
+  RequestOtpResult,
+  TripStarStateProvider,
+  UpdateUserProfileInput,
+  UpdateBookingInput,
+  UpdateTripInput,
+  VerifyOtpResult,
+} from "../state-provider";
 
 export class PostgresStateProvider implements TripStarStateProvider {
   constructor(private readonly connectionString: string) {}
 
   async listUsers(): Promise<User[]> {
+    return this.notImplemented();
+  }
+
+  async updateUserProfile(_userId: Id, _input: UpdateUserProfileInput): Promise<User> {
+    return this.notImplemented();
+  }
+
+  async requestLoginOtp(_email: string): Promise<RequestOtpResult> {
+    return this.notImplemented();
+  }
+
+  async verifyLoginOtp(_email: string, _otp: string): Promise<VerifyOtpResult> {
+    return this.notImplemented();
+  }
+
+  async getAuthSession(_token: string): Promise<VerifyOtpResult | null> {
+    return this.notImplemented();
+  }
+
+  async revokeAuthSession(_token: string): Promise<void> {
     return this.notImplemented();
   }
 

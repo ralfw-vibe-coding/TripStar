@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LocalStateProvider } from "./local-state-provider";
 import { resetIdsForTests } from "./id";
-import { mkdtempSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdtempSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Booking, Trip } from "../../model";
 
@@ -221,6 +221,31 @@ describe("LocalStateProvider", () => {
     expect(secondTrip.tripNumber).toBe("201");
   });
 
+  it("backs up local state before overwriting it", async () => {
+    const stateFilePath = join(mkdtempSync(join(tmpdir(), "tripstar-state-")), "state", "tripstar-state.json");
+    const provider = new LocalStateProvider({ now: () => fixedNow, stateFilePath });
+    await provider.createTrip({
+      title: "Alpha",
+      ownerUserId: "user_ralf",
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+      places: "Alpha",
+      sharedWithUserIds: [],
+    });
+    await provider.createTrip({
+      title: "Beta",
+      ownerUserId: "user_ralf",
+      startDate: "2026-07-03",
+      endDate: "2026-07-04",
+      places: "Beta",
+      sharedWithUserIds: [],
+    });
+
+    const backupDir = join(dirname(dirname(stateFilePath)), "backups");
+    expect(existsSync(backupDir)).toBe(true);
+    expect(readdirSync(backupDir).some((file) => file.startsWith("tripstar-state."))).toBe(true);
+  });
+
   it("uses configured initial trip number when no trips exist", async () => {
     const provider = new LocalStateProvider({
       now: () => fixedNow,
@@ -239,6 +264,50 @@ describe("LocalStateProvider", () => {
 
     expect(trip.tripNumber).toBe("098");
     expect(trip.title).toBe("#098");
+  });
+
+  it("creates users and sessions through local OTP auth", async () => {
+    const provider = new LocalStateProvider({ now: () => fixedNow });
+
+    const requested = await provider.requestLoginOtp("RALF@example.com");
+    const verified = await provider.verifyLoginOtp("ralf@example.com", requested.devOtp ?? "");
+    const session = await provider.getAuthSession(verified.session.token);
+
+    expect(requested.email).toBe("ralf@example.com");
+    expect(verified.user).toMatchObject({
+      email: "ralf@example.com",
+      shortCode: "RAL",
+      displayName: "ralf",
+    });
+    expect(session?.user.email).toBe("ralf@example.com");
+  });
+
+  it("updates a user's profile code", async () => {
+    const provider = new LocalStateProvider({ now: () => fixedNow });
+    const requested = await provider.requestLoginOtp("ralf@example.com");
+    const verified = await provider.verifyLoginOtp("ralf@example.com", requested.devOtp ?? "");
+
+    const user = await provider.updateUserProfile(verified.user.id, { shortCode: "rw" });
+
+    expect(user.shortCode).toBe("RW");
+  });
+
+  it("rejects expired or invalid OTPs", async () => {
+    const provider = new LocalStateProvider({
+      now: () => new Date("2026-05-26T09:10:00.000Z"),
+      otpChallenges: [
+        {
+          id: "otp_1",
+          email: "ralf@example.com",
+          otp: "123456",
+          expiresAt: "2026-05-26T09:00:00.000Z",
+          consumedAt: null,
+          createdAt: "2026-05-26T08:55:00.000Z",
+        },
+      ],
+    });
+
+    await expect(provider.verifyLoginOtp("ralf@example.com", "123456")).rejects.toThrow("Invalid or expired OTP");
   });
 
   it("assigns bookings to trips and rejects missing trips", async () => {

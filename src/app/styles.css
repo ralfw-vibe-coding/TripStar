@@ -31,6 +31,43 @@ button {
   grid-template-columns: 330px minmax(0, 1fr);
 }
 
+.auth-shell,
+.auth-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-panel {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #dbe2e7;
+  border-radius: 8px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-form h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.dev-otp {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #a7c7e8;
+  background: #edf6ff;
+  color: #174ea6;
+  font-weight: 700;
+}
+
 .sidebar {
   background: #ffffff;
   border-right: 1px solid #d9e0e5;
@@ -84,6 +121,67 @@ button {
 .trip-list-panel {
   display: grid;
   gap: 16px;
+}
+
+.profile-menu {
+  position: relative;
+}
+
+.profile-button {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.profile-popover {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(24, 33, 47, 0.14);
+}
+
+.profile-summary {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border-bottom: 1px solid #edf0f2;
+}
+
+.profile-summary span {
+  color: #667085;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.profile-popover button {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #18212f;
+  text-align: left;
+}
+
+.profile-popover button:hover {
+  background: #f1f4f6;
 }
 
 .panel-header,
@@ -357,7 +455,8 @@ button {
   background: rgba(13, 19, 28, 0.34);
 }
 
-.trip-dialog {
+.trip-dialog,
+.profile-dialog {
   width: min(100%, 560px);
   display: grid;
   gap: 16px;
@@ -365,6 +464,10 @@ button {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 24px 80px rgba(24, 33, 47, 0.22);
+}
+
+.profile-dialog {
+  width: min(100%, 420px);
 }
 
 .dialog-header h2 {
