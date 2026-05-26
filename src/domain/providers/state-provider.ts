@@ -29,6 +29,7 @@ export interface UpdateBookingInput {
   fromText?: string | null;
   toText?: string | null;
   travelers?: string[];
+  participantUserIds?: Id[];
   status?: Booking["status"];
   serviceIdentifier?: string | null;
   operator?: string | null;
@@ -60,6 +61,7 @@ export interface CreateBookingInput {
   fromText: string | null;
   toText: string | null;
   travelers: string[];
+  participantUserIds?: Id[];
   status: Booking["status"];
   serviceIdentifier: string | null;
   operator: string | null;

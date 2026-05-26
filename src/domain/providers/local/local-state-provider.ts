@@ -74,7 +74,7 @@ export class LocalStateProvider implements TripStarStateProvider {
     const persisted = options.stateFilePath ? this.readPersistedState(options.stateFilePath) : null;
     this.users = clone(options.users ?? persisted?.users ?? seedUsers);
     this.trips = this.normalizeTrips(clone(options.trips ?? persisted?.trips ?? seedTrips));
-    this.bookings = clone(options.bookings ?? persisted?.bookings ?? seedBookings);
+    this.bookings = this.normalizeBookings(clone(options.bookings ?? persisted?.bookings ?? seedBookings));
     this.documents = clone(options.documents ?? persisted?.documents ?? seedDocuments);
     this.activity = clone(options.activity ?? persisted?.activity ?? []);
     this.otpChallenges = clone(options.otpChallenges ?? persisted?.otpChallenges ?? []);
@@ -262,6 +262,7 @@ export class LocalStateProvider implements TripStarStateProvider {
       fromText: input.fromText,
       toText: input.toText,
       travelers: input.travelers,
+      participantUserIds: input.participantUserIds ?? [],
       status: input.status,
       serviceIdentifier: input.serviceIdentifier,
       operator: input.operator,
@@ -479,6 +480,13 @@ export class LocalStateProvider implements TripStarStateProvider {
     }
 
     return [...byTripNumber.values()];
+  }
+
+  private normalizeBookings(bookings: Booking[]): Booking[] {
+    return bookings.map((booking) => ({
+      ...booking,
+      participantUserIds: booking.participantUserIds ?? [],
+    }));
   }
 
   private persist(): void {

@@ -69,6 +69,7 @@ describe("submitTextDocument", () => {
     const result = await submitTextDocument(state, storage, analyzer, {
       text: "Flight to Berlin",
       tripId: trip.id,
+      currentUserId: "user_1",
     });
 
     expect(result.document).toMatchObject({
@@ -81,6 +82,7 @@ describe("submitTextDocument", () => {
     expect(result.bookings[0]).toMatchObject({
       tripId: trip.id,
       sourceDocumentId: result.document?.id,
+      participantUserIds: ["user_1"],
       title: "Flight to Berlin",
     });
   });
@@ -103,6 +105,7 @@ describe("submitTextDocument", () => {
     const result = await submitTextDocument(state, storage, emptyAnalyzer, {
       text: "Just a note without a reservation.",
       tripId: null,
+      currentUserId: "user_1",
     });
 
     expect(result).toEqual({ document: null, bookings: [] });
@@ -129,6 +132,7 @@ describe("submitTextDocument", () => {
       submitTextDocument(state, createStorage(), failingAnalyzer, {
         text: "Flight to Berlin",
         tripId: null,
+        currentUserId: "user_1",
       }),
     ).rejects.toThrow("analysis down");
 

@@ -6,6 +6,7 @@ import type { TripStarStateProvider } from "../providers/state-provider";
 export interface SubmitTextDocumentInput {
   text: string;
   tripId: Id | null;
+  currentUserId: Id;
 }
 
 export interface SubmitTextDocumentResult {
@@ -71,6 +72,7 @@ export async function submitTextDocument(
       ...booking,
       tripId: input.tripId,
       sourceDocumentId: document.id,
+      participantUserIds: [input.currentUserId],
       status: "inbox",
     })),
   );

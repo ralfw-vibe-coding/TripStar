@@ -62,6 +62,7 @@ describe("submitImageDocument", () => {
       base64: Buffer.from("image bytes").toString("base64"),
       mimeType: "image/png",
       tripId: null,
+      currentUserId: "user_1",
     });
 
     expect(result.document).toMatchObject({
@@ -72,6 +73,7 @@ describe("submitImageDocument", () => {
     expect(result.bookings).toHaveLength(1);
     expect(result.bookings[0]).toMatchObject({
       sourceDocumentId: result.document?.id,
+      participantUserIds: ["user_1"],
       title: "Hotel Berlin",
     });
   });
@@ -95,6 +97,7 @@ describe("submitImageDocument", () => {
       base64: Buffer.from("image bytes").toString("base64"),
       mimeType: "image/png",
       tripId: null,
+      currentUserId: "user_1",
     });
 
     expect(result).toEqual({ document: null, bookings: [] });
@@ -120,6 +123,7 @@ describe("submitImageDocument", () => {
         base64: Buffer.from("image bytes").toString("base64"),
         mimeType: "image/png",
         tripId: null,
+        currentUserId: "user_1",
       }),
     ).rejects.toThrow("vision down");
 

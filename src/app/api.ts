@@ -56,6 +56,13 @@ export function assignBookingTrip(bookingId: string, tripId: string | null): Pro
   });
 }
 
+export function updateBooking(bookingId: string, input: Partial<Booking>): Promise<Booking> {
+  return requestJson<Booking>(`/api/bookings/${bookingId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export function requestOtp(email: string): Promise<{ email: string; expiresAt: string; devOtp?: string }> {
   return requestJson("/api/auth/request-otp", {
     method: "POST",

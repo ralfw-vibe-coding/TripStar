@@ -7,6 +7,7 @@ export interface SubmitImageDocumentInput {
   base64: string;
   mimeType: string;
   tripId: Id | null;
+  currentUserId: Id;
 }
 
 export interface SubmitImageDocumentResult {
@@ -75,6 +76,7 @@ export async function submitImageDocument(
       ...booking,
       tripId: input.tripId,
       sourceDocumentId: document.id,
+      participantUserIds: [input.currentUserId],
       status: "inbox",
     })),
   );

@@ -32,6 +32,7 @@ const booking: Booking = {
   fromText: null,
   toText: null,
   travelers: [],
+  participantUserIds: [],
   status: "inbox",
   serviceIdentifier: null,
   operator: null,

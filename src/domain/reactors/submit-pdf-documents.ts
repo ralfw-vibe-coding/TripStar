@@ -11,6 +11,7 @@ export interface SubmitPdfDocumentInput {
 export interface SubmitPdfDocumentsInput {
   documents: SubmitPdfDocumentInput[];
   tripId: Id | null;
+  currentUserId: Id;
 }
 
 export interface SubmitPdfDocumentsResult {
@@ -31,7 +32,7 @@ export async function submitPdfDocuments(
   const documents: DocumentRecord[] = [];
   const bookings: Booking[] = [];
   for (const upload of input.documents) {
-    const result = await submitSinglePdfDocument(state, storage, analyzer, upload, input.tripId);
+    const result = await submitSinglePdfDocument(state, storage, analyzer, upload, input.tripId, input.currentUserId);
     documents.push(result.document);
     bookings.push(...result.bookings);
   }
@@ -44,6 +45,7 @@ async function submitSinglePdfDocument(
   analyzer: BookingAnalysisProvider,
   upload: SubmitPdfDocumentInput,
   tripId: Id | null,
+  currentUserId: Id,
 ): Promise<{ document: DocumentRecord; bookings: Booking[] }> {
   validatePdfUpload(upload);
   const stored = await storage.storePdfDocument(upload);
@@ -69,6 +71,7 @@ async function submitSinglePdfDocument(
       ...booking,
       tripId,
       sourceDocumentId: document.id,
+      participantUserIds: [currentUserId],
       status: "inbox",
     })),
   );

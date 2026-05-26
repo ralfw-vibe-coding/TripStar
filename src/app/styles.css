@@ -530,6 +530,7 @@ textarea:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -541,6 +542,33 @@ textarea:disabled {
   padding: 4px 8px;
   background: #ffffff;
   white-space: nowrap;
+}
+
+.participant-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.participant-chip,
+.participant-choice {
+  min-width: 32px;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #bfd3cb;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #eef8f4;
+  color: #0d5c4c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.participant-empty {
+  color: #8993a0;
+  font-size: 13px;
 }
 
 .flight-link {
@@ -596,6 +624,36 @@ textarea:disabled {
   color: #4f5f78;
   font-size: 15px;
   line-height: 1.5;
+}
+
+.participant-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.participant-picker h3 {
+  margin: 0;
+  color: #8993a0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.participant-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.participant-choice {
+  cursor: pointer;
+  background: #ffffff;
+  color: #667085;
+}
+
+.participant-choice.selected {
+  border-color: #0d8a72;
+  background: #e8f3ef;
+  color: #0d5c4c;
 }
 
 .detail-actions {

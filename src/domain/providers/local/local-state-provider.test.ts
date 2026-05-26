@@ -41,6 +41,7 @@ function testBooking(overrides: Partial<Booking> = {}): Booking {
     fromText: "San Francisco",
     toText: null,
     travelers: ["RW"],
+    participantUserIds: [],
     status: "inbox",
     serviceIdentifier: null,
     operator: "Hotel",
@@ -323,6 +324,15 @@ describe("LocalStateProvider", () => {
     await expect(provider.assignBookingToTrip("booking_hotel_1", "missing")).rejects.toThrow("Trip not found");
   });
 
+  it("normalizes persisted bookings from before participant assignment existed", async () => {
+    const provider = new LocalStateProvider({
+      now: () => fixedNow,
+      bookings: [{ ...testBooking(), participantUserIds: undefined as unknown as string[] }],
+    });
+
+    await expect(provider.listBookings()).resolves.toMatchObject([{ participantUserIds: [] }]);
+  });
+
   it("keeps past bookings in the calendar view so UI filters can decide visibility", async () => {
     const provider = new LocalStateProvider({
       now: () => fixedNow,
@@ -339,6 +349,7 @@ describe("LocalStateProvider", () => {
           fromText: null,
           toText: null,
           travelers: [],
+          participantUserIds: [],
           status: "inbox",
           serviceIdentifier: null,
           operator: null,

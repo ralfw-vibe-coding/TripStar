@@ -75,6 +75,7 @@ export interface Booking {
   fromText: string | null;
   toText: string | null;
   travelers: string[];
+  participantUserIds: Id[];
   status: BookingStatus;
   serviceIdentifier: string | null;
   operator: string | null;

@@ -65,6 +65,7 @@ describe("submitPdfDocuments", () => {
 
     const result = await submitPdfDocuments(state, createStorage(), analyzer, {
       tripId: trip.id,
+      currentUserId: "user_1",
       documents: [
         { base64: Buffer.from("%PDF 1").toString("base64"), originalFileName: "one.pdf" },
         { base64: Buffer.from("%PDF 2").toString("base64"), originalFileName: "two.pdf" },
@@ -74,7 +75,7 @@ describe("submitPdfDocuments", () => {
     expect(result.documents).toHaveLength(2);
     expect(result.documents[0]).toMatchObject({ tripId: trip.id, sourceType: "upload", mimeType: "application/pdf" });
     expect(result.bookings).toHaveLength(2);
-    expect(result.bookings[0]).toMatchObject({ tripId: trip.id, title: "Train to Hamburg" });
+    expect(result.bookings[0]).toMatchObject({ tripId: trip.id, participantUserIds: ["user_1"], title: "Train to Hamburg" });
   });
 
   it("stores PDFs even when no bookings are found", async () => {
@@ -93,6 +94,7 @@ describe("submitPdfDocuments", () => {
 
     const result = await submitPdfDocuments(state, createStorage(), emptyAnalyzer, {
       tripId: null,
+      currentUserId: "user_1",
       documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "empty.pdf" }],
     });
 
@@ -109,18 +111,20 @@ describe("submitPdfDocuments", () => {
   it("rejects empty or non-PDF uploads", async () => {
     const state = new LocalStateProvider({ now: () => new Date("2026-05-26T09:00:00.000Z") });
 
-    await expect(submitPdfDocuments(state, createStorage(), analyzer, { tripId: null, documents: [] })).rejects.toThrow(
+    await expect(submitPdfDocuments(state, createStorage(), analyzer, { tripId: null, currentUserId: "user_1", documents: [] })).rejects.toThrow(
       "At least one PDF document is required.",
     );
     await expect(
       submitPdfDocuments(state, createStorage(), analyzer, {
         tripId: null,
+        currentUserId: "user_1",
         documents: [{ base64: Buffer.from("not pdf").toString("base64"), originalFileName: "booking.txt" }],
       }),
     ).rejects.toThrow("Only PDF documents are accepted.");
     await expect(
       submitPdfDocuments(state, createStorage(), analyzer, {
         tripId: null,
+        currentUserId: "user_1",
         documents: [{ base64: "", originalFileName: "booking.pdf" }],
       }),
     ).rejects.toThrow("PDF document is empty.");
@@ -143,6 +147,7 @@ describe("submitPdfDocuments", () => {
     await expect(
       submitPdfDocuments(state, createStorage(), failingAnalyzer, {
         tripId: null,
+        currentUserId: "user_1",
         documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "failed.pdf" }],
       }),
     ).rejects.toThrow("pdf down");

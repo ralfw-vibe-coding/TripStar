@@ -42,6 +42,7 @@ import {
   submitImageDocument,
   submitPdfDocuments,
   submitTextDocument,
+  updateBooking,
   updateProfile,
   verifyOtp,
 } from "./api";
@@ -131,6 +132,17 @@ export function App() {
   async function handleAssignBooking(booking: CalendarBooking, tripId: string | null) {
     if (!view) return;
     const trip = view.trips.find((candidate) => candidate.id === tripId) ?? null;
+    const allowedParticipantIds = allowedParticipantUsers(trip, view.users, currentUser?.id ?? "").map((user) => user.id);
+    const retainedParticipantUserIds = booking.participantUserIds.filter((userId) => allowedParticipantIds.includes(userId));
+    const participantUserIds = tripId === null
+      ? currentUser
+        ? [currentUser.id]
+        : []
+      : retainedParticipantUserIds.length > 0
+        ? retainedParticipantUserIds
+        : currentUser && allowedParticipantIds.includes(currentUser.id)
+          ? [currentUser.id]
+          : [];
     const previousView = view;
     setView({
       ...view,
@@ -139,6 +151,7 @@ export function App() {
           ? {
               ...candidate,
               tripId,
+              participantUserIds,
               trip: trip
                 ? {
                     id: trip.id,
@@ -155,9 +168,27 @@ export function App() {
 
     try {
       await assignBookingTrip(booking.id, tripId);
+      if (participantUserIds.length !== booking.participantUserIds.length || participantUserIds.some((id) => !booking.participantUserIds.includes(id))) {
+        await updateBooking(booking.id, { participantUserIds });
+      }
     } catch (caught) {
       setView(previousView);
       setError(caught instanceof Error ? caught.message : "Booking could not be assigned.");
+    }
+  }
+
+  async function handleUpdateBookingParticipants(booking: CalendarBooking, participantUserIds: string[]) {
+    if (!view) return;
+    const previousView = view;
+    setView({
+      ...view,
+      bookings: view.bookings.map((candidate) => (candidate.id === booking.id ? { ...candidate, participantUserIds } : candidate)),
+    });
+    try {
+      await updateBooking(booking.id, { participantUserIds });
+    } catch (caught) {
+      setView(previousView);
+      setError(caught instanceof Error ? caught.message : "Participants could not be updated.");
     }
   }
 
@@ -276,6 +307,7 @@ export function App() {
             expandedBookingId={expandedBookingId}
             onToggleBooking={(id) => setExpandedBookingId((current) => (current === id ? null : id))}
             onAssign={handleAssignBooking}
+            onUpdateParticipants={handleUpdateBookingParticipants}
             onAddDocument={() => setIsDocumentDialogOpen(true)}
             onOpenDocument={handleOpenDocument}
             activityLog={activityLog}
@@ -501,6 +533,7 @@ function CalendarPanel({
   expandedBookingId,
   onToggleBooking,
   onAssign,
+  onUpdateParticipants,
   onAddDocument,
   onOpenDocument,
   activityLog,
@@ -510,6 +543,7 @@ function CalendarPanel({
   expandedBookingId: string | null;
   onToggleBooking: (id: string) => void;
   onAssign: (booking: CalendarBooking, tripId: string | null) => void;
+  onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
   onAddDocument: () => void;
   onOpenDocument: (documentId: string) => void;
   activityLog: ActivityLogEntry[];
@@ -575,8 +609,11 @@ function CalendarPanel({
                     expandedBookingId={expandedBookingId}
                     onToggleBooking={onToggleBooking}
                     onAssign={onAssign}
+                    onUpdateParticipants={onUpdateParticipants}
                     onOpenDocument={onOpenDocument}
                     visibleTrips={visibleTrips}
+                    users={view.users}
+                    currentUserId={currentUser.id}
                   />
                 ))}
               </div>
@@ -610,16 +647,24 @@ function BookingCard({
   expandedBookingId,
   onToggleBooking,
   onAssign,
+  onUpdateParticipants,
   onOpenDocument,
   visibleTrips,
+  users,
+  currentUserId,
 }: {
   booking: CalendarBooking;
   expandedBookingId: string | null;
   onToggleBooking: (id: string) => void;
   onAssign: (booking: CalendarBooking, tripId: string | null) => void;
+  onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
   onOpenDocument: (documentId: string) => void;
   visibleTrips: Trip[];
+  users: User[];
+  currentUserId: string;
 }) {
+  const fullTrip = visibleTrips.find((trip) => trip.id === booking.tripId) ?? null;
+  const allowedUsers = allowedParticipantUsers(fullTrip, users, currentUserId);
   return (
     <article
       className={`booking-card ${expandedBookingId === booking.id ? "expanded" : ""}`}
@@ -648,6 +693,7 @@ function BookingCard({
           )}
           {booking.trip && <span className="booking-trip">{booking.trip.shortCode}</span>}
           <span className="status-pill">{booking.status === "inbox" ? "Inbox" : booking.status}</span>
+          <ParticipantChips users={usersForIds(users, booking.participantUserIds)} />
         </span>
       </button>
 
@@ -667,8 +713,10 @@ function BookingCard({
               <dd>{booking.toText ?? "-"}</dd>
             </div>
             <div>
-              <dt>Travelers</dt>
-              <dd>{booking.travelers.join(", ")}</dd>
+              <dt>Participants</dt>
+              <dd>
+                <ParticipantChips users={usersForIds(users, booking.participantUserIds)} />
+              </dd>
             </div>
             <div>
               <dt>Operator</dt>
@@ -684,6 +732,12 @@ function BookingCard({
             <h3>Details</h3>
             <p>{booking.details || "-"}</p>
           </section>
+
+          <ParticipantPicker
+            allowedUsers={allowedUsers}
+            selectedUserIds={booking.participantUserIds}
+            onChange={(participantUserIds) => onUpdateParticipants(booking, participantUserIds)}
+          />
 
           <div className="detail-actions">
             <label className="field-label">
@@ -707,6 +761,53 @@ function BookingCard({
         </div>
       )}
     </article>
+  );
+}
+
+function ParticipantChips({ users }: { users: User[] }) {
+  if (users.length === 0) return <span className="participant-empty">No participants</span>;
+  return (
+    <span className="participant-chips">
+      {users.map((user) => (
+        <span className="participant-chip" key={user.id}>
+          {user.shortCode}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function ParticipantPicker({
+  allowedUsers,
+  selectedUserIds,
+  onChange,
+}: {
+  allowedUsers: User[];
+  selectedUserIds: string[];
+  onChange: (userIds: string[]) => void;
+}) {
+  return (
+    <section className="participant-picker">
+      <h3>Participants</h3>
+      <div>
+        {allowedUsers.map((user) => {
+          const selected = selectedUserIds.includes(user.id);
+          return (
+            <button
+              type="button"
+              className={`participant-choice ${selected ? "selected" : ""}`}
+              key={user.id}
+              onClick={() => {
+                const next = selected ? selectedUserIds.filter((userId) => userId !== user.id) : [...selectedUserIds, user.id];
+                onChange(next);
+              }}
+            >
+              {user.shortCode}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -778,6 +879,26 @@ function pad2(value: number): string {
 
 function visibleTripsForUser(trips: Trip[], userId: string): Trip[] {
   return trips.filter((trip) => trip.ownerUserId === userId || trip.sharedWithUserIds.includes(userId));
+}
+
+function allowedParticipantUsers(
+  trip: Pick<Trip, "ownerUserId" | "sharedWithUserIds"> | null,
+  users: User[],
+  currentUserId: string,
+): User[] {
+  if (!trip) {
+    return users.filter((user) => user.id === currentUserId);
+  }
+  const allowedIds = new Set([trip.ownerUserId, ...trip.sharedWithUserIds]);
+  return users.filter((user) => allowedIds.has(user.id));
+}
+
+function usersForIds(users: User[], userIds: string[]): User[] {
+  const byId = new Map(users.map((user) => [user.id, user]));
+  return userIds.flatMap((userId) => {
+    const user = byId.get(userId);
+    return user ? [user] : [];
+  });
 }
 
 function AnalysisProtocol({ entries }: { entries: ActivityLogEntry[] }) {

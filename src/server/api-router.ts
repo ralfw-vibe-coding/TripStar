@@ -97,6 +97,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         await submitTextDocument(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
           text: body.text,
           tripId: body.tripId,
+          currentUserId: user.id,
         }),
         { status: 201 },
       );
@@ -133,6 +134,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           base64: body.base64,
           mimeType: body.mimeType,
           tripId: body.tripId,
+          currentUserId: user.id,
         }),
         { status: 201 },
       );
@@ -148,6 +150,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         await submitPdfDocuments(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
           documents: body.documents,
           tripId: body.tripId,
+          currentUserId: user.id,
         }),
         { status: 201 },
       );
