@@ -21,6 +21,9 @@ function createStorage(): DocumentStorageProvider & { storedCount: number } {
     async storePdfDocument() {
       throw new Error("not used");
     },
+    async readDocument() {
+      throw new Error("not used");
+    },
   };
 }
 

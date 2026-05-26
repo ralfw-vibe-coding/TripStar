@@ -55,5 +55,6 @@ describe("LocalDocumentStorageProvider", () => {
     });
     expect(stored.storageKey).toMatch(/^documents\/pdfs\/.+\.pdf$/);
     await expect(readFile(join(storageDir, stored.storageKey), "utf8")).resolves.toBe("%PDF");
+    await expect(provider.readDocument(stored.storageKey)).resolves.toEqual({ base64: Buffer.from("%PDF").toString("base64") });
   });
 });

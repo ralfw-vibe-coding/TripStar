@@ -8,4 +8,5 @@ export interface DocumentStorageProvider {
   storeTextDocument(input: { text: string; originalFileName: string }): Promise<StoredDocument>;
   storeBase64Document(input: { base64: string; mimeType: string; originalFileName: string }): Promise<StoredDocument>;
   storePdfDocument(input: { base64: string; originalFileName: string }): Promise<StoredDocument>;
+  readDocument(storageKey: string): Promise<{ base64: string }>;
 }

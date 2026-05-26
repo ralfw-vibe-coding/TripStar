@@ -19,6 +19,9 @@ function createStorage(): DocumentStorageProvider {
         mimeType: "application/pdf",
       };
     },
+    async readDocument() {
+      throw new Error("not used");
+    },
   };
 }
 

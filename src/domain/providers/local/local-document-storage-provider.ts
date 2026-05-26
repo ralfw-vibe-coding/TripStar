@@ -1,5 +1,5 @@
 import type { DocumentStorageProvider, StoredDocument } from "../document-storage-provider";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -44,6 +44,11 @@ export class LocalDocumentStorageProvider implements DocumentStorageProvider {
       originalFileName: input.originalFileName,
       mimeType: "application/pdf",
     };
+  }
+
+  async readDocument(storageKey: string): Promise<{ base64: string }> {
+    const content = await readFile(join(this.storageDir, storageKey));
+    return { base64: content.toString("base64") };
   }
 }
 

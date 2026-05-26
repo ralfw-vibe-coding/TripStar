@@ -117,3 +117,14 @@ export function submitPdfDocuments(input: {
     body: JSON.stringify(input),
   });
 }
+
+export function fetchDocumentOriginal(documentId: string): Promise<{
+  id: string;
+  originalFileName: string | null;
+  mimeType: string | null;
+  sourceType: string;
+  base64: string | null;
+  text: string | null;
+}> {
+  return requestJson(`/api/documents/${documentId}/original`);
+}

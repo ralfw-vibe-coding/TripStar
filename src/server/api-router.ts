@@ -102,6 +102,26 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       );
     }
 
+    if (segments[0] === "documents" && segments.length === 3 && segments[2] === "original" && request.method === "GET") {
+      const user = await getCurrentUser(provider, bearerToken(request));
+      if (!user) {
+        return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      }
+      const document = (await provider.listDocuments()).find((candidate) => candidate.id === segments[1]);
+      if (!document) {
+        return jsonResponse({ error: "Document not found." }, { status: 404 });
+      }
+      const stored = document.storageKey ? await createDocumentStorageProvider().readDocument(document.storageKey) : { base64: null };
+      return jsonResponse({
+        id: document.id,
+        originalFileName: document.originalFileName,
+        mimeType: document.mimeType,
+        sourceType: document.sourceType,
+        base64: stored.base64,
+        text: document.extractedText,
+      });
+    }
+
     if (segments[0] === "documents" && segments.length === 2 && segments[1] === "image" && request.method === "POST") {
       const user = await getCurrentUser(provider, bearerToken(request));
       if (!user) {

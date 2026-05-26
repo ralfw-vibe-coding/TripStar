@@ -22,6 +22,7 @@ import {
   fetchActivityLog,
   fetchCalendar,
   fetchCurrentUser,
+  fetchDocumentOriginal,
   getStoredAuthToken,
   logout,
   requestOtp,
@@ -35,11 +36,21 @@ import {
 import { tripColor } from "./trip-colors";
 import { ownTripsForUser, sharedTripsForUser } from "./trip-filters";
 
+interface DocumentOriginalView {
+  id: string;
+  originalFileName: string | null;
+  mimeType: string | null;
+  sourceType: string;
+  base64: string | null;
+  text: string | null;
+}
+
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [view, setView] = useState<CalendarView | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [documentViewer, setDocumentViewer] = useState<DocumentOriginalView | null>(null);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<"calendar" | "reports">("calendar");
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +146,15 @@ export function App() {
     } catch (caught) {
       setView(previousView);
       setError(caught instanceof Error ? caught.message : "Booking could not be assigned.");
+    }
+  }
+
+  async function handleOpenDocument(documentId: string) {
+    setError(null);
+    try {
+      setDocumentViewer(await fetchDocumentOriginal(documentId));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Document could not be opened.");
     }
   }
 
@@ -245,6 +265,7 @@ export function App() {
             onToggleBooking={(id) => setExpandedBookingId((current) => (current === id ? null : id))}
             onAssign={handleAssignBooking}
             onAddDocument={() => setIsDocumentDialogOpen(true)}
+            onOpenDocument={handleOpenDocument}
             activityLog={activityLog}
           />
         ) : (
@@ -277,6 +298,8 @@ export function App() {
           }}
         />
       )}
+
+      {documentViewer && <DocumentViewer document={documentViewer} onClose={() => setDocumentViewer(null)} />}
     </main>
   );
 }
@@ -467,6 +490,7 @@ function CalendarPanel({
   onToggleBooking,
   onAssign,
   onAddDocument,
+  onOpenDocument,
   activityLog,
 }: {
   view: CalendarView | null;
@@ -475,6 +499,7 @@ function CalendarPanel({
   onToggleBooking: (id: string) => void;
   onAssign: (booking: CalendarBooking, tripId: string | null) => void;
   onAddDocument: () => void;
+  onOpenDocument: (documentId: string) => void;
   activityLog: ActivityLogEntry[];
 }) {
   const [tripFilter, setTripFilter] = useState("all");
@@ -533,16 +558,23 @@ function CalendarPanel({
             <button className="booking-summary" onClick={() => onToggleBooking(booking.id)}>
               <span className="booking-icon">{iconForType(booking.type)}</span>
               <span className="booking-main">
-                <strong>{booking.title}</strong>
-                <span>{formatBookingTime(booking)}</span>
+                <strong>{bookingHeaderTitle(booking)}</strong>
+                <span>{bookingHeaderMeta(booking)}</span>
+                {bookingRoute(booking) && <span>{bookingRoute(booking)}</span>}
               </span>
-              <span className="booking-trip">{booking.trip?.shortCode ?? "Inbox"}</span>
-              <span className="status-pill">{booking.status}</span>
+              <span className="booking-chips">
+                {booking.trip && <span className="booking-trip">{booking.trip.shortCode}</span>}
+                <span className="status-pill">{booking.status === "inbox" ? "Inbox" : booking.status}</span>
+              </span>
             </button>
 
             {expandedBookingId === booking.id && (
               <div className="booking-details">
                 <dl className="detail-grid">
+                  <div>
+                    <dt>When</dt>
+                    <dd>{formatBookingRange(booking)}</dd>
+                  </div>
                   <div>
                     <dt>From</dt>
                     <dd>{booking.fromText ?? "-"}</dd>
@@ -559,7 +591,16 @@ function CalendarPanel({
                     <dt>Operator</dt>
                     <dd>{booking.operator ?? "-"}</dd>
                   </div>
+                  <div>
+                    <dt>Reference</dt>
+                    <dd>{booking.serviceIdentifier ?? "-"}</dd>
+                  </div>
                 </dl>
+
+                <section className="booking-detail-text">
+                  <h3>Details</h3>
+                  <p>{booking.details || "-"}</p>
+                </section>
 
                 <div className="detail-actions">
                   <label className="field-label">
@@ -573,7 +614,12 @@ function CalendarPanel({
                       ))}
                     </select>
                   </label>
-                  <p className="details-text">{booking.details}</p>
+                  {booking.sourceDocumentId && (
+                    <button type="button" className="secondary-button document-link" onClick={() => onOpenDocument(booking.sourceDocumentId!)}>
+                      <FileUp size={16} />
+                      Original document
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1045,6 +1091,27 @@ function iconForType(type: CalendarBooking["type"]) {
   return <CalendarDays size={18} />;
 }
 
+function bookingHeaderTitle(booking: CalendarBooking): string {
+  if ((booking.type === "flight" || booking.type === "train") && booking.serviceIdentifier) {
+    return `${booking.serviceIdentifier} · ${booking.title}`;
+  }
+  if (booking.type === "lodging" && booking.operator && !booking.title.includes(booking.operator)) {
+    return `${booking.operator} · ${booking.title}`;
+  }
+  return booking.title;
+}
+
+function bookingHeaderMeta(booking: CalendarBooking): string {
+  return formatBookingRange(booking);
+}
+
+function bookingRoute(booking: CalendarBooking): string | null {
+  if (booking.fromText && booking.toText) return `${booking.fromText} -> ${booking.toText}`;
+  if (booking.toText) return booking.toText;
+  if (booking.fromText) return booking.fromText;
+  return null;
+}
+
 function formatBookingTime(booking: CalendarBooking): string {
   if (!booking.startAt) return "No date";
   const start = new Intl.DateTimeFormat("de-DE", {
@@ -1052,6 +1119,52 @@ function formatBookingTime(booking: CalendarBooking): string {
     timeStyle: "short",
   }).format(new Date(booking.startAt));
   return booking.toText ? `${start} · ${booking.toText}` : start;
+}
+
+function formatBookingRange(booking: CalendarBooking): string {
+  if (!booking.startAt) return "No date";
+  const start = new Date(booking.startAt);
+  if (!booking.endAt) {
+    return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(start);
+  }
+  const end = new Date(booking.endAt);
+  const sameDate =
+    start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth() && start.getDate() === end.getDate();
+  if (sameDate) {
+    const date = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" }).format(start);
+    const time = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
+    return `${date}, ${time.format(start)}-${time.format(end)}`;
+  }
+  const dateTime = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" });
+  return `${dateTime.format(start)} -> ${dateTime.format(end)}`;
+}
+
+function DocumentViewer({ document, onClose }: { document: DocumentOriginalView; onClose: () => void }) {
+  const source = document.base64 && document.mimeType ? `data:${document.mimeType};base64,${document.base64}` : null;
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="document-viewer" aria-label="Original document">
+        <header className="dialog-header">
+          <div>
+            <h2>{document.originalFileName ?? "Document"}</h2>
+            <p>{document.mimeType ?? document.sourceType}</p>
+          </div>
+          <button className="icon-command" type="button" aria-label="Close" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </header>
+        <div className="document-viewer-body">
+          {document.mimeType === "application/pdf" && source ? (
+            <iframe title={document.originalFileName ?? "PDF document"} src={source} />
+          ) : document.mimeType?.startsWith("image/") && source ? (
+            <img src={source} alt={document.originalFileName ?? "Document"} />
+          ) : (
+            <pre>{document.text ?? (source ? atob(document.base64 ?? "") : "")}</pre>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function shortDate(value: string): string {
