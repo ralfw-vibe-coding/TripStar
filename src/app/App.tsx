@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   LoaderCircle,
   LogOut,
+  ExternalLink,
   Plane,
   Plus,
   UserCircle,
@@ -563,6 +564,19 @@ function CalendarPanel({
                 {bookingRoute(booking) && <span>{bookingRoute(booking)}</span>}
               </span>
               <span className="booking-chips">
+                {flightSearchUrl(booking) && (
+                  <a
+                    className="flight-link"
+                    href={flightSearchUrl(booking) ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open flight data in Google"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Plane size={15} />
+                    <ExternalLink size={13} />
+                  </a>
+                )}
                 {booking.trip && <span className="booking-trip">{booking.trip.shortCode}</span>}
                 <span className="status-pill">{booking.status === "inbox" ? "Inbox" : booking.status}</span>
               </span>
@@ -1110,6 +1124,20 @@ function bookingRoute(booking: CalendarBooking): string | null {
   if (booking.toText) return booking.toText;
   if (booking.fromText) return booking.fromText;
   return null;
+}
+
+function flightSearchUrl(booking: CalendarBooking): string | null {
+  if (booking.type !== "flight" || !booking.serviceIdentifier) return null;
+  const departureCode = iataCodeFromText(booking.fromText);
+  if (!departureCode) return null;
+  const query = `${departureCode} departure ${booking.serviceIdentifier} today`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query).replace(/%20/g, "+")}`;
+}
+
+function iataCodeFromText(value: string | null): string | null {
+  if (!value) return null;
+  const parenMatch = /\b([A-Z]{3})\b/.exec(value.toUpperCase());
+  return parenMatch?.[1] ?? null;
 }
 
 function formatBookingTime(booking: CalendarBooking): string {

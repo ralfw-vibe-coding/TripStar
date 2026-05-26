@@ -500,12 +500,26 @@ textarea:disabled {
 }
 
 .booking-trip,
-.status-pill {
+.status-pill,
+.flight-link {
   border: 1px solid #cfd8df;
   border-radius: 999px;
   padding: 4px 8px;
   background: #ffffff;
   white-space: nowrap;
+}
+
+.flight-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #174ea6;
+  text-decoration: none;
+}
+
+.flight-link:hover {
+  border-color: #8fb8aa;
+  background: #eef8f4;
 }
 
 .booking-details {
