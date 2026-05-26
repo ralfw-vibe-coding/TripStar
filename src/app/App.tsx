@@ -14,7 +14,18 @@ import {
   UserRoundCheck,
   X,
 } from "lucide-react";
-import { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  ClipboardEvent,
+  CSSProperties,
+  DragEvent,
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ActivityLogEntry, CalendarBooking, CalendarView, Trip, User } from "../domain/model";
 import {
   assignBookingTrip,
@@ -512,6 +523,7 @@ function CalendarPanel({
 
   const filteredBookings = filterCalendarBookings(view.bookings, tripFilter, dateFilter);
   const visibleTrips = visibleTripsForUser(view.trips, currentUser.id);
+  const bookingGroups = groupBookingsByDay(filteredBookings);
 
   return (
     <section className="calendar-panel" aria-label="Bookings">
@@ -550,98 +562,151 @@ function CalendarPanel({
       </section>
 
       <div className="booking-stack">
-        {filteredBookings.map((booking) => (
-          <article
-            key={booking.id}
-            className={`booking-card ${expandedBookingId === booking.id ? "expanded" : ""}`}
-            style={{ borderLeftColor: booking.trip ? tripColorForBooking(booking.trip) : "#cfd8df" }}
-          >
-            <button className="booking-summary" onClick={() => onToggleBooking(booking.id)}>
-              <span className="booking-icon">{iconForType(booking.type)}</span>
-              <span className="booking-main">
-                <strong>{bookingHeaderTitle(booking)}</strong>
-                <span>{bookingHeaderMeta(booking)}</span>
-                {bookingRoute(booking) && <span>{bookingRoute(booking)}</span>}
-              </span>
-              <span className="booking-chips">
-                {flightSearchUrl(booking) && (
-                  <a
-                    className="flight-link"
-                    href={flightSearchUrl(booking) ?? undefined}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Open flight data in Google"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <Plane size={15} />
-                    <ExternalLink size={13} />
-                  </a>
-                )}
-                {booking.trip && <span className="booking-trip">{booking.trip.shortCode}</span>}
-                <span className="status-pill">{booking.status === "inbox" ? "Inbox" : booking.status}</span>
-              </span>
-            </button>
-
-            {expandedBookingId === booking.id && (
-              <div className="booking-details">
-                <dl className="detail-grid">
-                  <div>
-                    <dt>When</dt>
-                    <dd>{formatBookingRange(booking)}</dd>
-                  </div>
-                  <div>
-                    <dt>From</dt>
-                    <dd>{booking.fromText ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>To</dt>
-                    <dd>{booking.toText ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>Travelers</dt>
-                    <dd>{booking.travelers.join(", ")}</dd>
-                  </div>
-                  <div>
-                    <dt>Operator</dt>
-                    <dd>{booking.operator ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>Reference</dt>
-                    <dd>{booking.serviceIdentifier ?? "-"}</dd>
-                  </div>
-                </dl>
-
-                <section className="booking-detail-text">
-                  <h3>Details</h3>
-                  <p>{booking.details || "-"}</p>
-                </section>
-
-                <div className="detail-actions">
-                  <label className="field-label">
-                    Trip
-                    <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
-                      <option value="">Inbox / no trip</option>
-                      {visibleTrips.map((trip) => (
-                        <option key={trip.id} value={trip.id}>
-                          {trip.title} #{trip.tripNumber}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {booking.sourceDocumentId && (
-                    <button type="button" className="secondary-button document-link" onClick={() => onOpenDocument(booking.sourceDocumentId!)}>
-                      <FileUp size={16} />
-                      Original document
-                    </button>
-                  )}
-                </div>
+        {bookingGroups.map((group, index) => (
+          <div className="booking-day-with-gap" key={group.key}>
+            {index > 0 && <DayGap previousKey={bookingGroups[index - 1].key} currentKey={group.key} />}
+            <section className="booking-day-group">
+              <h3>{group.label}</h3>
+              <div className="booking-day-stack">
+                {group.bookings.map((booking) => (
+                  <BookingCard
+                    key={booking.id}
+                    booking={booking}
+                    expandedBookingId={expandedBookingId}
+                    onToggleBooking={onToggleBooking}
+                    onAssign={onAssign}
+                    onOpenDocument={onOpenDocument}
+                    visibleTrips={visibleTrips}
+                  />
+                ))}
               </div>
-            )}
-          </article>
+            </section>
+          </div>
         ))}
       </div>
       <AnalysisProtocol entries={activityLog} />
     </section>
+  );
+}
+
+function DayGap({ previousKey, currentKey }: { previousKey: string; currentKey: string }) {
+  const days = dayGap(previousKey, currentKey);
+  if (days <= 1) return null;
+  const ratio = Math.min(days / 180, 1);
+  return (
+    <div
+      className="day-gap"
+      aria-hidden="true"
+      style={{
+        "--gap-width": `${Math.round(30 + ratio * 70)}%`,
+        "--gap-height": `${Math.round(4 + ratio * 24)}px`,
+      } as CSSProperties}
+    />
+  );
+}
+
+function BookingCard({
+  booking,
+  expandedBookingId,
+  onToggleBooking,
+  onAssign,
+  onOpenDocument,
+  visibleTrips,
+}: {
+  booking: CalendarBooking;
+  expandedBookingId: string | null;
+  onToggleBooking: (id: string) => void;
+  onAssign: (booking: CalendarBooking, tripId: string | null) => void;
+  onOpenDocument: (documentId: string) => void;
+  visibleTrips: Trip[];
+}) {
+  return (
+    <article
+      className={`booking-card ${expandedBookingId === booking.id ? "expanded" : ""}`}
+      style={{ borderLeftColor: booking.trip ? tripColorForBooking(booking.trip) : "#cfd8df" }}
+    >
+      <button className="booking-summary" onClick={() => onToggleBooking(booking.id)}>
+        <span className="booking-icon">{iconForType(booking.type)}</span>
+        <span className="booking-main">
+          <strong>{bookingHeaderTitle(booking)}</strong>
+          <span>{bookingHeaderMeta(booking)}</span>
+          {bookingRoute(booking) && <span>{bookingRoute(booking)}</span>}
+        </span>
+        <span className="booking-chips">
+          {flightSearchUrl(booking) && (
+            <a
+              className="flight-link"
+              href={flightSearchUrl(booking) ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open flight data in Google"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Plane size={15} />
+              <ExternalLink size={13} />
+            </a>
+          )}
+          {booking.trip && <span className="booking-trip">{booking.trip.shortCode}</span>}
+          <span className="status-pill">{booking.status === "inbox" ? "Inbox" : booking.status}</span>
+        </span>
+      </button>
+
+      {expandedBookingId === booking.id && (
+        <div className="booking-details">
+          <dl className="detail-grid">
+            <div>
+              <dt>When</dt>
+              <dd>{formatBookingRange(booking)}</dd>
+            </div>
+            <div>
+              <dt>From</dt>
+              <dd>{booking.fromText ?? "-"}</dd>
+            </div>
+            <div>
+              <dt>To</dt>
+              <dd>{booking.toText ?? "-"}</dd>
+            </div>
+            <div>
+              <dt>Travelers</dt>
+              <dd>{booking.travelers.join(", ")}</dd>
+            </div>
+            <div>
+              <dt>Operator</dt>
+              <dd>{booking.operator ?? "-"}</dd>
+            </div>
+            <div>
+              <dt>Reference</dt>
+              <dd>{booking.serviceIdentifier ?? "-"}</dd>
+            </div>
+          </dl>
+
+          <section className="booking-detail-text">
+            <h3>Details</h3>
+            <p>{booking.details || "-"}</p>
+          </section>
+
+          <div className="detail-actions">
+            <label className="field-label">
+              Trip
+              <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
+                <option value="">Inbox / no trip</option>
+                {visibleTrips.map((trip) => (
+                  <option key={trip.id} value={trip.id}>
+                    {trip.title} #{trip.tripNumber}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {booking.sourceDocumentId && (
+              <button type="button" className="secondary-button document-link" onClick={() => onOpenDocument(booking.sourceDocumentId!)}>
+                <FileUp size={16} />
+                Original document
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -662,10 +727,53 @@ function filterCalendarBookings(
 function startDateForCalendarFilter(dateFilter: "today" | "10" | "30" | "all"): Date | null {
   if (dateFilter === "all") return null;
   const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  if (dateFilter === "10") start.setUTCDate(start.getUTCDate() - 10);
-  if (dateFilter === "30") start.setUTCDate(start.getUTCDate() - 30);
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (dateFilter === "10") start.setDate(start.getDate() - 10);
+  if (dateFilter === "30") start.setDate(start.getDate() - 30);
   return start;
+}
+
+function groupBookingsByDay(bookings: CalendarBooking[]): Array<{ key: string; label: string; bookings: CalendarBooking[] }> {
+  const groups = new Map<string, CalendarBooking[]>();
+  for (const booking of bookings) {
+    const key = booking.startAt ? localDayKey(new Date(booking.startAt)) : "no-date";
+    groups.set(key, [...(groups.get(key) ?? []), booking]);
+  }
+  return Array.from(groups.entries()).map(([key, bookings]) => ({
+    key,
+    label: key === "no-date" ? "No date" : formatDayGroupLabel(key),
+    bookings,
+  }));
+}
+
+function formatDayGroupLabel(dateKey: string): string {
+  const date = localDateFromKey(dateKey);
+  return new Intl.DateTimeFormat("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function dayGap(previousKey: string, currentKey: string): number {
+  if (previousKey === "no-date" || currentKey === "no-date") return 0;
+  const previous = localDateFromKey(previousKey).getTime();
+  const current = localDateFromKey(currentKey).getTime();
+  return Math.max(0, Math.round((current - previous) / 86_400_000));
+}
+
+function localDayKey(date: Date): string {
+  return [date.getFullYear(), pad2(date.getMonth() + 1), pad2(date.getDate())].join("-");
+}
+
+function localDateFromKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
 function visibleTripsForUser(trips: Trip[], userId: string): Trip[] {

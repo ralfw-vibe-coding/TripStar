@@ -379,7 +379,41 @@ textarea:disabled {
 
 .booking-stack {
   display: grid;
+  gap: 18px;
+}
+
+.booking-day-with-gap {
+  display: grid;
+  gap: 8px;
+}
+
+.booking-day-group {
+  display: grid;
+  gap: 8px;
+}
+
+.booking-day-group h3 {
+  margin: 0;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.booking-day-stack {
+  display: grid;
   gap: 10px;
+}
+
+.day-gap {
+  width: var(--gap-width);
+  height: var(--gap-height);
+  max-width: 100%;
+  max-height: 28px;
+  justify-self: center;
+  border-radius: 999px;
+  background: #d8dee4;
+  opacity: 0.85;
 }
 
 .analysis-protocol {
