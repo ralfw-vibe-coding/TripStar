@@ -91,7 +91,7 @@ export interface DocumentRecord {
   storageKey: string | null;
   originalFileName: string | null;
   mimeType: string | null;
-  sourceType: "upload" | "email_text" | "email_attachment";
+  sourceType: "upload" | "text_input" | "screenshot" | "email_text" | "email_attachment";
   sourceEmailIngestId: Id | null;
   extractedText: string | null;
   isReceipt: boolean;

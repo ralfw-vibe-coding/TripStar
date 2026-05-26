@@ -323,7 +323,7 @@ describe("LocalStateProvider", () => {
     await expect(provider.assignBookingToTrip("booking_hotel_1", "missing")).rejects.toThrow("Trip not found");
   });
 
-  it("builds a calendar view without past bookings", async () => {
+  it("keeps past inbox bookings visible for review", async () => {
     const provider = new LocalStateProvider({
       now: () => fixedNow,
       bookings: [
@@ -351,7 +351,7 @@ describe("LocalStateProvider", () => {
     });
 
     const calendar = await provider.getCalendarView(fixedNow);
-    expect(calendar.bookings).toHaveLength(0);
+    expect(calendar.bookings).toMatchObject([{ id: "past", tripId: null }]);
   });
 
   it("updates trips, bookings, and document assignments", async () => {

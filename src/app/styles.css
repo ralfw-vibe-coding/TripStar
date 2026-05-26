@@ -17,7 +17,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -212,6 +213,16 @@ button {
   gap: 8px;
 }
 
+.icon-command:disabled,
+.secondary-button:disabled,
+.primary-button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .icon-command {
   width: 40px;
   height: 40px;
@@ -307,19 +318,122 @@ button {
 
 .calendar-panel {
   width: min(100%, 980px);
+  display: grid;
+  gap: 24px;
 }
 
 .section-header {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .section-header h2 {
   font-size: 26px;
 }
 
+.section-header.compact h2 {
+  font-size: 18px;
+}
+
+.section-header.compact p {
+  font-size: 13px;
+}
+
+.calendar-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(150px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #dbe2e7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.calendar-filters label {
+  display: grid;
+  gap: 5px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.calendar-filters select {
+  min-height: 36px;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #18212f;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.calendar-filters > span {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  color: #667085;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .booking-stack {
   display: grid;
   gap: 10px;
+}
+
+.analysis-protocol {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #101820;
+  color: #d7e0e7;
+  font-family: "Courier New", Courier, monospace;
+}
+
+.protocol-stack {
+  display: grid;
+  gap: 2px;
+}
+
+.empty-protocol {
+  min-height: 34px;
+}
+
+.protocol-row {
+  display: grid;
+  grid-template-columns: 90px 52px 72px 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.protocol-row.error {
+  color: #ffb4b4;
+}
+
+.protocol-row span,
+.protocol-row time,
+.empty-protocol {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.protocol-row time,
+.protocol-row span:nth-child(2),
+.protocol-row span:nth-child(3),
+.protocol-row span:nth-child(4) {
+  color: #8fb8aa;
+}
+
+.empty-protocol {
+  display: grid;
+  place-items: center;
+  color: #8fb8aa;
 }
 
 .booking-card {
@@ -424,13 +538,19 @@ button {
 }
 
 .field-label input,
-.field-label select {
+.field-label select,
+.field-label textarea {
   min-height: 38px;
   border: 1px solid #cfd8df;
   border-radius: 8px;
   padding: 0 10px;
   background: #ffffff;
   color: #18212f;
+}
+
+.field-label textarea {
+  padding: 10px;
+  resize: vertical;
 }
 
 .details-text {
@@ -456,7 +576,8 @@ button {
 }
 
 .trip-dialog,
-.profile-dialog {
+.profile-dialog,
+.document-dialog {
   width: min(100%, 560px);
   display: grid;
   gap: 16px;
@@ -468,6 +589,94 @@ button {
 
 .profile-dialog {
   width: min(100%, 420px);
+}
+
+.document-dialog {
+  width: min(100%, 680px);
+}
+
+.analysis-status {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #174ea6;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  background: #f7f9fb;
+}
+
+.mode-switch button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #667085;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mode-switch button.active {
+  background: #ffffff;
+  color: #174ea6;
+  box-shadow: 0 1px 3px rgba(24, 33, 47, 0.12);
+}
+
+.screenshot-preview {
+  min-height: 220px;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f8fafc;
+  color: #667085;
+}
+
+.screenshot-preview img {
+  width: 100%;
+  max-height: 340px;
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.paste-button {
+  justify-self: start;
+}
+
+.analysis-status svg,
+.button-spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+.analysis-status strong,
+.analysis-status span {
+  display: block;
+}
+
+.analysis-status span {
+  margin-top: 2px;
+  color: #496583;
+  font-size: 13px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .dialog-header h2 {

@@ -35,6 +35,38 @@ export interface UpdateBookingInput {
   details?: string;
 }
 
+export interface CreateDocumentInput {
+  tripId: Id | null;
+  storageKey: string | null;
+  originalFileName: string | null;
+  mimeType: string | null;
+  sourceType: DocumentRecord["sourceType"];
+  sourceEmailIngestId: Id | null;
+  extractedText: string | null;
+  isReceipt?: boolean;
+  receiptAmount?: number | null;
+  receiptCurrency?: string | null;
+  receiptJson?: unknown | null;
+  processingStatus: DocumentRecord["processingStatus"];
+}
+
+export interface CreateBookingInput {
+  tripId: Id | null;
+  sourceDocumentId: Id | null;
+  type: Booking["type"];
+  title: string;
+  startAt: string | null;
+  endAt: string | null;
+  fromText: string | null;
+  toText: string | null;
+  travelers: string[];
+  status: Booking["status"];
+  serviceIdentifier: string | null;
+  operator: string | null;
+  details: string;
+  extractedJson: unknown | null;
+}
+
 export interface RequestOtpResult {
   email: string;
   expiresAt: string;
@@ -63,10 +95,12 @@ export interface TripStarStateProvider {
   updateTrip(id: Id, input: UpdateTripInput): Promise<Trip>;
 
   listBookings(): Promise<Booking[]>;
+  createBookings(input: CreateBookingInput[]): Promise<Booking[]>;
   updateBooking(id: Id, input: UpdateBookingInput): Promise<Booking>;
   assignBookingToTrip(bookingId: Id, tripId: Id | null): Promise<Booking>;
 
   listDocuments(): Promise<DocumentRecord[]>;
+  createDocument(input: CreateDocumentInput): Promise<DocumentRecord>;
   assignDocumentToTrip(documentId: Id, tripId: Id | null): Promise<DocumentRecord>;
 
   appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp">): Promise<ActivityLogEntry>;

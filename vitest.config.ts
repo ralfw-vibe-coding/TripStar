@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      include: ["src/domain/rpus/**/*.ts", "src/domain/providers/local/**/*.ts", "src/server/**/*.ts"],
+      include: ["src/domain/rpus/**/*.ts", "src/domain/providers/local/**/*.ts", "src/domain/reactors/**/*.ts", "src/server/**/*.ts"],
       exclude: ["src/**/*.test.ts", "src/domain/providers/local/seed.ts"],
       thresholds: {
         statements: 80,

@@ -12,6 +12,8 @@ import type {
 } from "../../model";
 import type {
   CreateTripInput,
+  CreateBookingInput,
+  CreateDocumentInput,
   RequestOtpResult,
   TripStarStateProvider,
   UpdateUserProfileInput,
@@ -247,6 +249,43 @@ export class LocalStateProvider implements TripStarStateProvider {
     return clone(this.bookings.filter((booking) => booking.deletedAt === null));
   }
 
+  async createBookings(inputs: CreateBookingInput[]): Promise<Booking[]> {
+    const timestamp = isoDate(this.now());
+    const bookings = inputs.map<Booking>((input) => ({
+      id: `booking_${randomUUID()}`,
+      tripId: input.tripId,
+      sourceDocumentId: input.sourceDocumentId,
+      type: input.type,
+      title: input.title,
+      startAt: input.startAt,
+      endAt: input.endAt,
+      fromText: input.fromText,
+      toText: input.toText,
+      travelers: input.travelers,
+      status: input.status,
+      serviceIdentifier: input.serviceIdentifier,
+      operator: input.operator,
+      details: input.details,
+      extractedJson: input.extractedJson,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      deletedAt: null,
+    }));
+
+    for (const booking of bookings) {
+      if (booking.tripId !== null) {
+        this.requireTrip(booking.tripId);
+      }
+      if (booking.sourceDocumentId !== null) {
+        this.requireDocument(booking.sourceDocumentId);
+      }
+    }
+
+    this.bookings.push(...bookings);
+    this.persist();
+    return clone(bookings);
+  }
+
   async updateBooking(id: Id, input: UpdateBookingInput): Promise<Booking> {
     const booking = this.requireBooking(id);
     Object.assign(booking, input, { updatedAt: isoDate(this.now()) });
@@ -281,6 +320,36 @@ export class LocalStateProvider implements TripStarStateProvider {
 
   async listDocuments(): Promise<DocumentRecord[]> {
     return clone(this.documents.filter((document) => document.deletedAt === null));
+  }
+
+  async createDocument(input: CreateDocumentInput): Promise<DocumentRecord> {
+    if (input.tripId !== null) {
+      this.requireTrip(input.tripId);
+    }
+
+    const timestamp = isoDate(this.now());
+    const document: DocumentRecord = {
+      id: `document_${randomUUID()}`,
+      tripId: input.tripId,
+      storageKey: input.storageKey,
+      originalFileName: input.originalFileName,
+      mimeType: input.mimeType,
+      sourceType: input.sourceType,
+      sourceEmailIngestId: input.sourceEmailIngestId,
+      extractedText: input.extractedText,
+      isReceipt: input.isReceipt ?? false,
+      receiptAmount: input.receiptAmount ?? null,
+      receiptCurrency: input.receiptCurrency ?? null,
+      receiptJson: input.receiptJson ?? null,
+      processingStatus: input.processingStatus,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      deletedAt: null,
+    };
+
+    this.documents.push(document);
+    this.persist();
+    return clone(document);
   }
 
   async assignDocumentToTrip(documentId: Id, tripId: Id | null): Promise<DocumentRecord> {
@@ -320,7 +389,7 @@ export class LocalStateProvider implements TripStarStateProvider {
     const trips = await this.listTrips();
     const tripById = new Map(trips.map((trip) => [trip.id, trip]));
     const bookings = (await this.listBookings())
-      .filter((booking) => booking.startAt === null || new Date(booking.startAt) >= this.startOfDay(now))
+      .filter((booking) => booking.tripId === null || booking.startAt === null || new Date(booking.startAt) >= this.startOfDay(now))
       .sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? ""))
       .map<CalendarBooking>((booking) => {
         const trip = booking.tripId ? tripById.get(booking.tripId) ?? null : null;

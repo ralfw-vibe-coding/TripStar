@@ -1,4 +1,4 @@
-import type { AuthSession, Booking, CalendarView, Trip, User } from "../domain/model";
+import type { ActivityLogEntry, AuthSession, Booking, CalendarView, Trip, User } from "../domain/model";
 import type { CreateTripInput } from "../domain/providers/state-provider";
 
 const authTokenStorageKey = "tripstar.authToken";
@@ -36,6 +36,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchCalendar(): Promise<CalendarView> {
   return requestJson<CalendarView>("/api/calendar");
+}
+
+export function fetchActivityLog(): Promise<ActivityLogEntry[]> {
+  return requestJson<ActivityLogEntry[]>("/api/activity-log");
 }
 
 export function createTrip(input: CreateTripInput): Promise<Trip> {
@@ -77,6 +81,26 @@ export function logout(): Promise<{ ok: true }> {
 export function updateProfile(input: { shortCode: string }): Promise<{ user: User }> {
   return requestJson("/api/auth/profile", {
     method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function submitTextDocument(input: { text: string; tripId: string | null }): Promise<{
+  document: unknown | null;
+  bookings: Booking[];
+}> {
+  return requestJson("/api/documents/text", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function submitImageDocument(input: { base64: string; mimeType: string; tripId: string | null }): Promise<{
+  document: unknown | null;
+  bookings: Booking[];
+}> {
+  return requestJson("/api/documents/image", {
+    method: "POST",
     body: JSON.stringify(input),
   });
 }
