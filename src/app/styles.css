@@ -624,6 +624,7 @@ textarea:disabled {
   color: #4f5f78;
   font-size: 15px;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 .participant-picker {
@@ -878,6 +879,11 @@ textarea:disabled {
   border: 1px solid #dbe2e7;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.pdf-file-list strong {
+  color: #18212f;
+  font-size: 13px;
 }
 
 .pdf-file-list span {

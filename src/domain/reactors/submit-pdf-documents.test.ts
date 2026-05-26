@@ -108,6 +108,62 @@ describe("submitPdfDocuments", () => {
     ]);
   });
 
+  it("stores duplicate bookings from a single PDF only once", async () => {
+    const state = new LocalStateProvider({ now: () => new Date("2026-05-26T09:00:00.000Z") });
+    const duplicateAnalyzer: BookingAnalysisProvider = {
+      async analyzeText() {
+        throw new Error("not used");
+      },
+      async analyzeImage() {
+        throw new Error("not used");
+      },
+      async analyzePdf() {
+        return [
+          {
+            type: "flight",
+            title: "DAD -> KTI",
+            startAt: "2026-04-13T19:30:00.000Z",
+            endAt: "2026-04-13T21:55:00.000Z",
+            fromText: "DAD · Da Nang",
+            toText: "KTI · Phnom Penh",
+            travelers: ["Ralf"],
+            serviceIdentifier: "K6843",
+            operator: "Cambodia Angkor Air",
+            details: "Ticket number: 123",
+            extractedJson: { page: 1 },
+          },
+          {
+            type: "flight",
+            title: "DAD -> KTI",
+            startAt: "2026-04-13T19:30:00.000Z",
+            endAt: "2026-04-13T21:55:00.000Z",
+            fromText: "DAD · Da Nang",
+            toText: "KTI · Phnom Penh",
+            travelers: ["Ralf"],
+            serviceIdentifier: "K6843",
+            operator: "Cambodia Angkor Air",
+            details: "Ticket number: 123",
+            extractedJson: { page: 2 },
+          },
+        ];
+      },
+    };
+
+    const result = await submitPdfDocuments(state, createStorage(), duplicateAnalyzer, {
+      tripId: null,
+      currentUserId: "user_1",
+      documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "duplicate.pdf" }],
+    });
+
+    expect(result.bookings).toHaveLength(1);
+    await expect(state.listActivity()).resolves.toEqual([
+      expect.objectContaining({
+        message: "PDF analyzed, created 1 booking",
+        details: expect.objectContaining({ bookingCount: 1, extractedBookingCount: 2 }),
+      }),
+    ]);
+  });
+
   it("rejects empty or non-PDF uploads", async () => {
     const state = new LocalStateProvider({ now: () => new Date("2026-05-26T09:00:00.000Z") });
 

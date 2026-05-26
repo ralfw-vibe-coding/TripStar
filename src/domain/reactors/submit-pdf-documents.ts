@@ -2,6 +2,7 @@ import type { Booking, DocumentRecord, Id } from "../model";
 import type { AnalyzedBookingInput, BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider, StoredDocument } from "../providers/document-storage-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
+import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
 
 export interface SubmitPdfDocumentInput {
   base64: string;
@@ -65,6 +66,8 @@ async function submitSinglePdfDocument(
     throw error;
   }
 
+  const extractedBookingCount = analyzedBookings.length;
+  analyzedBookings = deduplicateAnalyzedBookings(analyzedBookings);
   const document = await createPdfDocument(state, stored, tripId, "ready");
   const bookings = await state.createBookings(
     analyzedBookings.map((booking) => ({
@@ -84,7 +87,7 @@ async function submitSinglePdfDocument(
         ? "PDF analyzed, no bookings extracted"
         : `PDF analyzed, created ${bookings.length} booking${bookings.length === 1 ? "" : "s"}`,
     documentName: document.originalFileName,
-    details: { documentId: document.id, bookingCount: bookings.length, tripId },
+    details: { documentId: document.id, bookingCount: bookings.length, extractedBookingCount, tripId },
   });
   return { document, bookings };
 }

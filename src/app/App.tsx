@@ -713,12 +713,6 @@ function BookingCard({
               <dd>{booking.toText ?? "-"}</dd>
             </div>
             <div>
-              <dt>Participants</dt>
-              <dd>
-                <ParticipantChips users={usersForIds(users, booking.participantUserIds)} />
-              </dd>
-            </div>
-            <div>
               <dt>Operator</dt>
               <dd>{booking.operator ?? "-"}</dd>
             </div>
@@ -987,7 +981,7 @@ function TextDocumentDialog({
   const [text, setText] = useState("");
   const [tripId, setTripId] = useState("");
   const [inputMode, setInputMode] = useState<"upload" | "manual">("upload");
-  const [pdfFiles, setPdfFiles] = useState<Array<{ name: string; base64: string }>>([]);
+  const [pdfFiles, setPdfFiles] = useState<Array<{ name: string; size: number; base64: string }>>([]);
   const [isPdfDragActive, setIsPdfDragActive] = useState(false);
   const [screenshot, setScreenshot] = useState<{ dataUrl: string; base64: string; mimeType: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1054,6 +1048,7 @@ function TextDocumentDialog({
 
   async function handlePdfFilesChange(event: ChangeEvent<HTMLInputElement>) {
     await acceptPdfFiles(Array.from(event.currentTarget.files ?? []));
+    event.currentTarget.value = "";
   }
 
   async function acceptPdfFiles(files: File[]) {
@@ -1064,7 +1059,14 @@ function TextDocumentDialog({
       setPdfFiles([]);
       return;
     }
-    setPdfFiles(await Promise.all(files.map(pdfFileToPayload)));
+    const acceptedFiles = await Promise.all(files.map(pdfFileToPayload));
+    setPdfFiles((current) => {
+      const byIdentity = new Map(current.map((file) => [`${file.name}:${file.size}`, file]));
+      for (const file of acceptedFiles) {
+        byIdentity.set(`${file.name}:${file.size}`, file);
+      }
+      return [...byIdentity.values()];
+    });
   }
 
   async function handlePdfDrop(event: DragEvent<HTMLLabelElement>) {
@@ -1139,8 +1141,9 @@ function TextDocumentDialog({
             <span>or click to choose one or more files</span>
             {pdfFiles.length > 0 && (
               <div className="pdf-file-list">
+                <strong>{pdfFiles.length === 1 ? "1 PDF selected" : `${pdfFiles.length} PDFs selected`}</strong>
                 {pdfFiles.map((file) => (
-                  <span key={file.name}>{file.name}</span>
+                  <span key={`${file.name}:${file.size}`}>{file.name}</span>
                 ))}
               </div>
             )}
@@ -1217,7 +1220,7 @@ async function imageBlobToPayload(blob: Blob): Promise<{ dataUrl: string; base64
   return { dataUrl, base64, mimeType: blob.type };
 }
 
-async function pdfFileToPayload(file: File): Promise<{ name: string; base64: string }> {
+async function pdfFileToPayload(file: File): Promise<{ name: string; size: number; base64: string }> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
@@ -1225,7 +1228,7 @@ async function pdfFileToPayload(file: File): Promise<{ name: string; base64: str
     reader.readAsDataURL(file);
   });
   const [, base64 = ""] = dataUrl.split(",", 2);
-  return { name: file.name, base64 };
+  return { name: file.name, size: file.size, base64 };
 }
 
 function TripDialog({

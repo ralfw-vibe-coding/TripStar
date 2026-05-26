@@ -2,6 +2,7 @@ import type { Booking, DocumentRecord, Id } from "../model";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
+import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
 
 export interface SubmitImageDocumentInput {
   base64: string;
@@ -51,6 +52,7 @@ export async function submitImageDocument(
     });
     return { document: null, bookings: [] };
   }
+  analyzedBookings = deduplicateAnalyzedBookings(analyzedBookings);
 
   const stored = await storage.storeBase64Document({
     base64: input.base64,

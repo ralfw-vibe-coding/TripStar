@@ -25,15 +25,33 @@ describe("OpenAIBookingAnalysisProvider", () => {
             bookings: [
               {
                 type: "flight",
-                title: "Flight",
-                startAt: "03.07. 09:30",
-                endAt: null,
-                fromText: "Sofia",
-                toText: "Berlin",
-                travelers: [],
-                serviceIdentifier: null,
-                operator: null,
-                details: "Flight",
+                summary: "Flight from Sofia to Berlin",
+                flight: {
+                  flightNumber: null,
+                  airline: null,
+                  airlineCode: null,
+                  departure: { code: null, name: null, city: "Sofia", terminal: null, gate: null },
+                  arrival: { code: null, name: null, city: "Berlin", terminal: null, gate: null },
+                  departureAtLocal: "03.07. 09:30",
+                  arrivalAtLocal: null,
+                  boardingAtLocal: null,
+                  bookingReference: null,
+                  ticketNumber: null,
+                  passengers: [],
+                  seats: [],
+                  cabinClass: null,
+                  baggage: null,
+                },
+                train: null,
+                lodging: null,
+                rentalCar: null,
+                ferry: null,
+                event: null,
+                other: null,
+                importantDetails: [],
+                evidence: [],
+                warnings: [],
+                confidence: 0.8,
               },
             ],
           }),
@@ -46,6 +64,11 @@ describe("OpenAIBookingAnalysisProvider", () => {
     const bookings = await provider.analyzeText("Flug am 03.07. um 09:30");
 
     expect(bookings[0].startAt).toBe("2026-07-03T09:30:00.000Z");
+    expect(bookings[0].extractedJson).toMatchObject({
+      provider: "openai",
+      model: "gpt-test",
+      extracted: { type: "flight", confidence: 0.8 },
+    });
     expect(JSON.stringify(fetchMock.mock.calls[0][1]?.body)).toContain("assume 2026");
   });
 
@@ -87,5 +110,21 @@ describe("OpenAIBookingAnalysisProvider", () => {
         }),
       ]),
     );
+  });
+
+  it("requests type-specific booking JSON from OpenAI", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ output_text: JSON.stringify({ bookings: [] }) }), { status: 200 }),
+    );
+    const provider = new OpenAIBookingAnalysisProvider("sk-test", "gpt-test", () => new Date("2026-05-26T12:00:00.000Z"));
+
+    await provider.analyzeText("Flight LH1429 from SOF to FRA");
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const schema = body.text.format.schema;
+    expect(schema.properties.bookings.items.required).toEqual(
+      expect.arrayContaining(["flight", "train", "lodging", "evidence", "warnings", "confidence"]),
+    );
+    expect(body.input[0].content).toContain("For flights, prefer structured flight data");
   });
 });
