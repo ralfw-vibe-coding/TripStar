@@ -895,8 +895,24 @@ textarea:disabled {
   gap: 16px;
   padding: 20px;
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 24px 80px rgba(24, 33, 47, 0.22);
+  background: #101820;
+  color: #d7e0e7;
+  font-family: "Courier New", Courier, monospace;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+.activity-log-dialog .dialog-header h2,
+.activity-log-dialog .dialog-header p {
+  color: #d7e0e7;
+}
+
+.activity-log-dialog .icon-command {
+  color: #8fb8aa;
+}
+
+.activity-log-dialog .icon-command:hover {
+  color: #d7e0e7;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .activity-log-dialog .protocol-stack {
