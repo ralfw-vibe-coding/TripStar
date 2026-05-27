@@ -686,6 +686,16 @@ textarea:disabled {
   color: #18212f;
 }
 
+.booking-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.booking-edit-title {
+  grid-column: span 3;
+}
+
 .booking-detail-text {
   display: grid;
   gap: 6px;
@@ -704,6 +714,23 @@ textarea:disabled {
   font-size: 15px;
   line-height: 1.5;
   white-space: pre-line;
+}
+
+.booking-detail-text textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+
+.booking-save-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.inline-error {
+  color: #8a1f1f;
+  font-size: 13px;
 }
 
 .participant-picker {

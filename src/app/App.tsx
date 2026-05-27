@@ -256,6 +256,32 @@ export function App() {
     }
   }
 
+  async function handleSaveBooking(booking: CalendarBooking, input: Partial<CalendarBooking>) {
+    if (!view) return;
+    const previousView = view;
+    const optimisticBooking = { ...booking, ...input, updatedAt: new Date().toISOString() };
+    setView({
+      ...view,
+      bookings: view.bookings.map((candidate) => (candidate.id === booking.id ? optimisticBooking : candidate)),
+    });
+    try {
+      const saved = await updateBooking(booking.id, input);
+      setView((current) =>
+        current
+          ? {
+              ...current,
+              bookings: current.bookings.map((candidate) =>
+                candidate.id === booking.id ? { ...candidate, ...saved, trip: candidate.trip } : candidate,
+              ),
+            }
+          : current,
+      );
+    } catch (caught) {
+      setView(previousView);
+      throw caught;
+    }
+  }
+
   async function handleDeleteBooking(booking: CalendarBooking) {
     if (!view) return;
     if (pendingDeleteBookingId !== booking.id) {
@@ -408,6 +434,7 @@ export function App() {
             onToggleBooking={(id) => setExpandedBookingId((current) => (current === id ? null : id))}
             onAssign={handleAssignBooking}
             onUpdateParticipants={handleUpdateBookingParticipants}
+            onSaveBooking={handleSaveBooking}
             onDeleteBooking={handleDeleteBooking}
             pendingDeleteBookingId={pendingDeleteBookingId}
             onClearPendingDelete={() => setPendingDeleteBookingId(null)}
@@ -645,6 +672,7 @@ function CalendarPanel({
   onToggleBooking,
   onAssign,
   onUpdateParticipants,
+  onSaveBooking,
   onDeleteBooking,
   pendingDeleteBookingId,
   onClearPendingDelete,
@@ -659,6 +687,7 @@ function CalendarPanel({
   onToggleBooking: (id: string) => void;
   onAssign: (booking: CalendarBooking, tripId: string | null) => void;
   onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
+  onSaveBooking: (booking: CalendarBooking, input: Partial<CalendarBooking>) => Promise<void>;
   onDeleteBooking: (booking: CalendarBooking) => void;
   pendingDeleteBookingId: string | null;
   onClearPendingDelete: () => void;
@@ -752,6 +781,7 @@ function CalendarPanel({
                     onToggleBooking={onToggleBooking}
                     onAssign={onAssign}
                     onUpdateParticipants={onUpdateParticipants}
+                    onSaveBooking={onSaveBooking}
                     onDeleteBooking={onDeleteBooking}
                     isDeletePending={pendingDeleteBookingId === booking.id}
                     onClearPendingDelete={onClearPendingDelete}
@@ -815,6 +845,7 @@ function BookingCard({
   onToggleBooking,
   onAssign,
   onUpdateParticipants,
+  onSaveBooking,
   onDeleteBooking,
   isDeletePending,
   onClearPendingDelete,
@@ -828,6 +859,7 @@ function BookingCard({
   onToggleBooking: (id: string) => void;
   onAssign: (booking: CalendarBooking, tripId: string | null) => void;
   onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
+  onSaveBooking: (booking: CalendarBooking, input: Partial<CalendarBooking>) => Promise<void>;
   onDeleteBooking: (booking: CalendarBooking) => void;
   isDeletePending: boolean;
   onClearPendingDelete: () => void;
@@ -838,6 +870,39 @@ function BookingCard({
 }) {
   const fullTrip = visibleTrips.find((trip) => trip.id === booking.tripId) ?? null;
   const allowedUsers = allowedParticipantUsers(fullTrip, users, currentUserId);
+  const [draft, setDraft] = useState(() => bookingDraftFromBooking(booking));
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const draftDirty = isBookingDraftDirty(booking, draft);
+
+  useEffect(() => {
+    setDraft(bookingDraftFromBooking(booking));
+    setDraftError(null);
+  }, [
+    booking.id,
+    booking.title,
+    booking.type,
+    booking.startAt,
+    booking.endAt,
+    booking.fromText,
+    booking.toText,
+    booking.operator,
+    booking.serviceIdentifier,
+    booking.details,
+  ]);
+
+  async function saveDraft() {
+    setIsSavingDraft(true);
+    setDraftError(null);
+    try {
+      await onSaveBooking(booking, bookingInputFromDraft(draft));
+    } catch (caught) {
+      setDraftError(caught instanceof Error ? caught.message : "Booking could not be saved.");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }
+
   return (
     <article
       className={`booking-card ${expandedBookingId === booking.id ? "expanded" : ""}`}
@@ -906,32 +971,56 @@ function BookingCard({
 
       {expandedBookingId === booking.id && (
         <div className="booking-details">
-          <dl className="detail-grid">
-            <div>
-              <dt>When</dt>
-              <dd>{formatBookingRange(booking)}</dd>
-            </div>
-            <div>
-              <dt>From</dt>
-              <dd>{booking.fromText ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>To</dt>
-              <dd>{booking.toText ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>Operator</dt>
-              <dd>{booking.operator ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>Reference</dt>
-              <dd>{booking.serviceIdentifier ?? "-"}</dd>
-            </div>
-          </dl>
+          <div className="booking-edit-grid">
+            <label className="field-label">
+              Type *
+              <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as CalendarBooking["type"] })}>
+                <option value="flight">Flight</option>
+                <option value="lodging">Lodging</option>
+                <option value="train">Train</option>
+                <option value="rental_car">Rental car</option>
+                <option value="ferry">Ferry</option>
+                <option value="event">Event</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label className="field-label booking-edit-title">
+              Title *
+              <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+            </label>
+            <label className="field-label">
+              Start
+              <input
+                type="datetime-local"
+                value={draft.startAt}
+                onChange={(event) => setDraft({ ...draft, startAt: event.target.value })}
+              />
+            </label>
+            <label className="field-label">
+              End
+              <input type="datetime-local" value={draft.endAt} onChange={(event) => setDraft({ ...draft, endAt: event.target.value })} />
+            </label>
+            <label className="field-label">
+              From
+              <input value={draft.fromText} onChange={(event) => setDraft({ ...draft, fromText: event.target.value })} />
+            </label>
+            <label className="field-label">
+              To
+              <input value={draft.toText} onChange={(event) => setDraft({ ...draft, toText: event.target.value })} />
+            </label>
+            <label className="field-label">
+              Operator
+              <input value={draft.operator} onChange={(event) => setDraft({ ...draft, operator: event.target.value })} />
+            </label>
+            <label className="field-label">
+              Reference
+              <input value={draft.serviceIdentifier} onChange={(event) => setDraft({ ...draft, serviceIdentifier: event.target.value })} />
+            </label>
+          </div>
 
           <section className="booking-detail-text">
             <h3>Details</h3>
-            <p>{booking.details || "-"}</p>
+            <textarea value={draft.details} rows={6} onChange={(event) => setDraft({ ...draft, details: event.target.value })} />
           </section>
 
           <ParticipantPicker
@@ -941,6 +1030,13 @@ function BookingCard({
           />
 
           <div className="detail-actions">
+            <div className="booking-save-area">
+              {draftError && <div className="inline-error">{draftError}</div>}
+              <button type="button" className="primary-button" onClick={saveDraft} disabled={!draftDirty || isSavingDraft}>
+                {isSavingDraft ? <LoaderCircle className="button-spinner" size={16} aria-hidden="true" /> : <Check size={16} />}
+                {isSavingDraft ? "Saving" : draftDirty ? "Save changes" : "Saved"}
+              </button>
+            </div>
             <label className="field-label">
               Trip
               <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
@@ -1010,6 +1106,78 @@ function ParticipantPicker({
       </div>
     </section>
   );
+}
+
+interface BookingDraft {
+  type: CalendarBooking["type"];
+  title: string;
+  startAt: string;
+  endAt: string;
+  fromText: string;
+  toText: string;
+  operator: string;
+  serviceIdentifier: string;
+  details: string;
+}
+
+function bookingDraftFromBooking(booking: CalendarBooking): BookingDraft {
+  return {
+    type: booking.type,
+    title: booking.title,
+    startAt: toDateTimeLocalValue(booking.startAt),
+    endAt: toDateTimeLocalValue(booking.endAt),
+    fromText: booking.fromText ?? "",
+    toText: booking.toText ?? "",
+    operator: booking.operator ?? "",
+    serviceIdentifier: booking.serviceIdentifier ?? "",
+    details: booking.details,
+  };
+}
+
+function bookingInputFromDraft(draft: BookingDraft): Partial<CalendarBooking> {
+  return {
+    type: draft.type,
+    title: draft.title.trim() || "Untitled booking",
+    startAt: fromDateTimeLocalValue(draft.startAt),
+    endAt: fromDateTimeLocalValue(draft.endAt),
+    fromText: nullableText(draft.fromText),
+    toText: nullableText(draft.toText),
+    operator: nullableText(draft.operator),
+    serviceIdentifier: nullableText(draft.serviceIdentifier),
+    details: draft.details.trim(),
+  };
+}
+
+function isBookingDraftDirty(booking: CalendarBooking, draft: BookingDraft): boolean {
+  const input = bookingInputFromDraft(draft);
+  return (
+    input.type !== booking.type ||
+    input.title !== booking.title ||
+    input.startAt !== booking.startAt ||
+    input.endAt !== booking.endAt ||
+    input.fromText !== booking.fromText ||
+    input.toText !== booking.toText ||
+    input.operator !== booking.operator ||
+    input.serviceIdentifier !== booking.serviceIdentifier ||
+    input.details !== booking.details
+  );
+}
+
+function toDateTimeLocalValue(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocalValue(value: string): string | null {
+  return value ? new Date(value).toISOString() : null;
+}
+
+function nullableText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 function filterCalendarBookings(
