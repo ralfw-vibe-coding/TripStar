@@ -197,7 +197,24 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (request.method === "POST" && segments[0] === "ingest-email" && segments.length === 1) {
       const token = bearerToken(request);
       const expectedToken = process.env.EMAIL_INGEST_TOKEN;
-      if (!token || !expectedToken || token !== expectedToken) {
+      if (!expectedToken) {
+        await provider.appendActivity({
+          level: "error",
+          scope: "inbox",
+          message: "[Inbox] EMAIL_INGEST_TOKEN not configured — request rejected",
+          documentName: null,
+          details: null,
+        });
+        return jsonResponse({ error: "Unauthorized." }, { status: 401 });
+      }
+      if (!token || token !== expectedToken) {
+        await provider.appendActivity({
+          level: "warn",
+          scope: "inbox",
+          message: "[Inbox] Request rejected: invalid or missing token",
+          documentName: null,
+          details: null,
+        });
         return jsonResponse({ error: "Unauthorized." }, { status: 401 });
       }
       const part = await readJson<IngestPart>(request);
