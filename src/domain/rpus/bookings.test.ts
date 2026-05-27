@@ -27,6 +27,7 @@ const booking: Booking = {
   title: "Hotel",
   startAt: "2026-07-01T10:00:00.000Z",
   endAt: null,
+  timePoints: [],
   fromText: null,
   toText: null,
   travelers: [],

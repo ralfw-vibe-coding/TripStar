@@ -53,6 +53,7 @@ import {
 } from "./api";
 import { tripColor } from "./trip-colors";
 import { ownTripsForUser, sharedTripsForUser } from "./trip-filters";
+import { formatTimePointLocal } from "../domain/time/booking-time";
 
 interface DocumentOriginalView {
   id: string;
@@ -1140,6 +1141,7 @@ function bookingInputFromDraft(draft: BookingDraft): Partial<CalendarBooking> {
     title: draft.title.trim() || "Untitled booking",
     startAt: fromDateTimeLocalValue(draft.startAt),
     endAt: fromDateTimeLocalValue(draft.endAt),
+    timePoints: [],
     fromText: nullableText(draft.fromText),
     toText: nullableText(draft.toText),
     operator: nullableText(draft.operator),
@@ -1793,6 +1795,10 @@ function iataCodeFromText(value: string | null): string | null {
 }
 
 function formatBookingTime(booking: CalendarBooking): string {
+  const departure = timePointFor(booking, "departure") ?? booking.timePoints[0];
+  if (departure) {
+    return booking.toText ? `${formatTimePointLocal(departure)} · ${booking.toText}` : formatTimePointLocal(departure);
+  }
   if (!booking.startAt) return "No date";
   const start = new Intl.DateTimeFormat("de-DE", {
     dateStyle: "medium",
@@ -1802,6 +1808,14 @@ function formatBookingTime(booking: CalendarBooking): string {
 }
 
 function formatBookingRange(booking: CalendarBooking): string {
+  const departure = timePointFor(booking, "departure") ?? timePointFor(booking, "start") ?? booking.timePoints[0];
+  const arrival = timePointFor(booking, "arrival") ?? timePointFor(booking, "end") ?? booking.timePoints[1];
+  if (departure && arrival) {
+    return `${formatTimePointLocal(departure)}-${timeOnlyFromLocalDateTime(arrival.localDateTime)}`;
+  }
+  if (departure) {
+    return formatTimePointLocal(departure);
+  }
   if (!booking.startAt) return "No date";
   const start = new Date(booking.startAt);
   if (!booking.endAt) {
@@ -1817,6 +1831,15 @@ function formatBookingRange(booking: CalendarBooking): string {
   }
   const dateTime = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" });
   return `${dateTime.format(start)} -> ${dateTime.format(end)}`;
+}
+
+function timePointFor(booking: CalendarBooking, label: string) {
+  return booking.timePoints.find((point) => point.label === label) ?? null;
+}
+
+function timeOnlyFromLocalDateTime(value: string): string {
+  const date = new Date(`${value}:00`);
+  return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function DocumentViewer({ document, onClose }: { document: DocumentOriginalView; onClose: () => void }) {

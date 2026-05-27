@@ -52,14 +52,28 @@ describe("projectExtractedBooking", () => {
     expect(booking).toMatchObject({
       type: "flight",
       title: "SOF -> FRA",
-      startAt: "2026-07-03T06:00:00.000Z",
-      endAt: "2026-07-03T07:35:00.000Z",
+      startAt: "2026-07-03T03:00:00.000Z",
+      endAt: "2026-07-03T05:35:00.000Z",
       fromText: "SOF · Sofia",
       toText: "FRA · Frankfurt",
       travelers: ["Ralf Westphal"],
       serviceIdentifier: "LH1429",
       operator: "Lufthansa",
     });
+    expect(booking.timePoints).toMatchObject([
+      {
+        label: "departure",
+        localDateTime: "2026-07-03T06:00",
+        timeZone: "Europe/Sofia",
+        instant: "2026-07-03T03:00:00.000Z",
+      },
+      {
+        label: "arrival",
+        localDateTime: "2026-07-03T07:35",
+        timeZone: "Europe/Berlin",
+        instant: "2026-07-03T05:35:00.000Z",
+      },
+    ]);
     expect(booking.details).toContain("Departure: SOF · Sofia Airport, Terminal 2, Gate B4");
     expect(booking.details).toContain("Ticket number: 2201234567890");
     expect(booking.extractedJson).toMatchObject({ type: "flight", confidence: 0.93 });

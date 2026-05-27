@@ -5,6 +5,7 @@ export interface AnalyzedBookingInput {
   title: string;
   startAt: string | null;
   endAt: string | null;
+  timePoints?: Booking["timePoints"];
   fromText: string | null;
   toText: string | null;
   travelers: string[];

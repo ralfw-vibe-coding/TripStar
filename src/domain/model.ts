@@ -70,6 +70,7 @@ export interface Booking {
   title: string;
   startAt: string | null;
   endAt: string | null;
+  timePoints: BookingTimePoint[];
   fromText: string | null;
   toText: string | null;
   travelers: string[];
@@ -82,6 +83,14 @@ export interface Booking {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+export interface BookingTimePoint {
+  label: "departure" | "arrival" | "start" | "end" | "check_in" | "check_out";
+  localDateTime: string;
+  timeZone: string;
+  instant: string;
+  placeText: string | null;
 }
 
 export interface DocumentRecord {

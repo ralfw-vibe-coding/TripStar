@@ -24,6 +24,7 @@ export interface UpdateBookingInput {
   type?: Booking["type"];
   startAt?: string | null;
   endAt?: string | null;
+  timePoints?: Booking["timePoints"];
   fromText?: string | null;
   toText?: string | null;
   travelers?: string[];
@@ -56,6 +57,7 @@ export interface CreateBookingInput {
   title: string;
   startAt: string | null;
   endAt: string | null;
+  timePoints?: Booking["timePoints"];
   fromText: string | null;
   toText: string | null;
   travelers: string[];

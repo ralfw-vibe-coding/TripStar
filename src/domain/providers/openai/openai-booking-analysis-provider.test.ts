@@ -10,6 +10,11 @@ describe("normalizeDateTime", () => {
   it("keeps explicit years intact", () => {
     expect(normalizeDateTime("2027-07-03T09:30:00.000Z", 2026)).toBe("2027-07-03T09:30:00.000Z");
   });
+
+  it("converts local date/time values in a known timezone to UTC instants", () => {
+    expect(normalizeDateTime("01.06. 15:20", 2026, "Europe/Sofia")).toBe("2026-06-01T12:20:00.000Z");
+    expect(normalizeDateTime("2026-06-01T16:45", 2026, "Europe/London")).toBe("2026-06-01T15:45:00.000Z");
+  });
 });
 
 describe("OpenAIBookingAnalysisProvider", () => {
@@ -63,7 +68,8 @@ describe("OpenAIBookingAnalysisProvider", () => {
 
     const bookings = await provider.analyzeText("Flug am 03.07. um 09:30");
 
-    expect(bookings[0].startAt).toBe("2026-07-03T09:30:00.000Z");
+    expect(bookings[0].startAt).toBe("2026-07-03T06:30:00.000Z");
+    expect(bookings[0].timePoints).toMatchObject([{ localDateTime: "2026-07-03T09:30", timeZone: "Europe/Sofia" }]);
     expect(bookings[0].extractedJson).toMatchObject({
       provider: "openai",
       model: "gpt-test",

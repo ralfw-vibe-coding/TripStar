@@ -1,5 +1,6 @@
 import type { AnalyzedBookingInput, BookingAnalysisProvider } from "../booking-analysis-provider";
 import { projectExtractedBooking, type ExtractedBooking } from "../../extraction/booking-extraction";
+import { localDateTimeToInstant, normalizeLocalDateTime } from "../../time/booking-time";
 
 interface OpenAIResponsesPayload {
   output?: Array<{
@@ -310,8 +311,12 @@ function extractOutputText(payload: OpenAIResponsesPayload): string {
   return text;
 }
 
-export function normalizeDateTime(value: string | null, currentYear: number): string | null {
+export function normalizeDateTime(value: string | null, currentYear: number, timeZone?: string | null): string | null {
   if (!value) return null;
+  if (timeZone) {
+    const localDateTime = normalizeLocalDateTime(value, currentYear);
+    return localDateTime ? localDateTimeToInstant(localDateTime, timeZone) : null;
+  }
   const germanDate = /^(\d{1,2})\.(\d{1,2})\.?(?:\s+(\d{1,2}):(\d{2}))?$/.exec(value.trim());
   if (germanDate) {
     const [, day, month, hour = "0", minute = "0"] = germanDate;

@@ -265,6 +265,7 @@ export class LocalStateProvider implements TripStarStateProvider {
       title: input.title,
       startAt: input.startAt,
       endAt: input.endAt,
+      timePoints: input.timePoints ?? [],
       fromText: input.fromText,
       toText: input.toText,
       travelers: input.travelers,
@@ -560,6 +561,7 @@ export class LocalStateProvider implements TripStarStateProvider {
     return bookings.map((booking) => ({
       ...booking,
       participantUserIds: booking.participantUserIds ?? [],
+      timePoints: booking.timePoints ?? [],
     }));
   }
 

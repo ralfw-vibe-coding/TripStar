@@ -238,7 +238,7 @@ export class PostgresStateProvider implements TripStarStateProvider {
   async listBookings(): Promise<Booking[]> {
     await this.ready;
     const rows = await this.sql`select data from bookings where deleted_at is null order by starts_at nulls last`;
-    return rows.map((row) => row.data as Booking);
+    return rows.map((row) => this.normalizeBooking(row.data as Booking));
   }
 
   async createBookings(inputs: CreateBookingInput[]): Promise<Booking[]> {
@@ -252,6 +252,7 @@ export class PostgresStateProvider implements TripStarStateProvider {
       title: input.title,
       startAt: input.startAt,
       endAt: input.endAt,
+      timePoints: input.timePoints ?? [],
       fromText: input.fromText,
       toText: input.toText,
       travelers: input.travelers,
@@ -564,7 +565,7 @@ export class PostgresStateProvider implements TripStarStateProvider {
 
   private async requireBooking(id: Id): Promise<Booking> {
     const rows = await this.sql`select data from bookings where id = ${id} and deleted_at is null limit 1`;
-    const booking = rows[0]?.data as Booking | undefined;
+    const booking = rows[0]?.data ? this.normalizeBooking(rows[0].data as Booking) : undefined;
     if (!booking) throw new Error(`Booking not found: ${id}`);
     return booking;
   }
@@ -616,6 +617,14 @@ export class PostgresStateProvider implements TripStarStateProvider {
 
   private nowIso(): string {
     return this.now().toISOString();
+  }
+
+  private normalizeBooking(booking: Booking): Booking {
+    return {
+      ...booking,
+      participantUserIds: booking.participantUserIds ?? [],
+      timePoints: booking.timePoints ?? [],
+    };
   }
 }
 
