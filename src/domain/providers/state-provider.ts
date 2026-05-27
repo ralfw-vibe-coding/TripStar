@@ -1,4 +1,4 @@
-import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Id, Trip, User } from "../model";
+import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Id, IngestPart, Trip, User } from "../model";
 
 export interface CreateTripInput {
   title: string;
@@ -129,4 +129,11 @@ export interface TripStarStateProvider {
   listActivity(): Promise<ActivityLogEntry[]>;
 
   getCalendarView(now?: Date): Promise<CalendarView>;
+
+  findUserByEmail(email: string): Promise<User | null>;
+  findDocumentByEmailMessageId(messageId: string): Promise<DocumentRecord | null>;
+  storeIngestPart(part: IngestPart): Promise<void>;
+  getIngestParts(txId: string): Promise<IngestPart[]>;
+  deleteIngestParts(txId: string): Promise<void>;
+  purgeStaleIngestParts(olderThanMinutes: number): Promise<number>;
 }

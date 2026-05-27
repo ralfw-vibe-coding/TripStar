@@ -8,6 +8,7 @@ import type {
   CalendarView,
   DocumentRecord,
   Id,
+  IngestPart,
   OtpChallenge,
   Trip,
   User,
@@ -457,6 +458,55 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return rows.map((row) => row.data as ActivityLogEntry);
   }
 
+  async findUserByEmail(email: string): Promise<User | null> {
+    await this.ready;
+    const rows = await this.sql`select data from users where email = ${email.trim().toLowerCase()} limit 1`;
+    return (rows[0]?.data as User | undefined) ?? null;
+  }
+
+  async findDocumentByEmailMessageId(messageId: string): Promise<DocumentRecord | null> {
+    await this.ready;
+    const rows = await this.sql`
+      select data from documents
+      where data->>'sourceEmailIngestId' = ${messageId} and deleted_at is null
+      limit 1
+    `;
+    return (rows[0]?.data as DocumentRecord | undefined) ?? null;
+  }
+
+  async storeIngestPart(part: IngestPart): Promise<void> {
+    await this.ready;
+    await this.sql`
+      insert into ingest_parts (tx_id, data, received_at)
+      values (${part.txId}, ${toJson(part)}, now())
+    `;
+  }
+
+  async getIngestParts(txId: string): Promise<IngestPart[]> {
+    await this.ready;
+    const rows = await this.sql`
+      select data from ingest_parts
+      where tx_id = ${txId}
+      order by (data->>'part')::int
+    `;
+    return rows.map((row) => row.data as IngestPart);
+  }
+
+  async deleteIngestParts(txId: string): Promise<void> {
+    await this.ready;
+    await this.sql`delete from ingest_parts where tx_id = ${txId}`;
+  }
+
+  async purgeStaleIngestParts(olderThanMinutes: number): Promise<number> {
+    await this.ready;
+    const rows = await this.sql`
+      delete from ingest_parts
+      where received_at < now() - (${olderThanMinutes} || ' minutes')::interval
+      returning tx_id
+    `;
+    return rows.length;
+  }
+
   async getCalendarView(now: Date = this.now()): Promise<CalendarView> {
     const trips = await this.listTrips();
     const users = await this.listUsers();
@@ -543,6 +593,12 @@ export class PostgresStateProvider implements TripStarStateProvider {
       data jsonb not null
     )`;
     await this.sql`create index if not exists activity_log_timestamp_idx on activity_log (timestamp desc)`;
+    await this.sql`create table if not exists ingest_parts (
+      tx_id text not null,
+      data jsonb not null,
+      received_at timestamptz not null default now()
+    )`;
+    await this.sql`create index if not exists ingest_parts_tx_id_idx on ingest_parts (tx_id)`;
   }
 
   private async findUser(id: Id): Promise<User | null> {

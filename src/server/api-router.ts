@@ -8,7 +8,9 @@ import { OpenAIBookingAnalysisProvider } from "../domain/providers/openai/openai
 import { R2DocumentStorageProvider } from "../domain/providers/remote/r2-document-storage-provider";
 import type { DocumentStorageProvider } from "../domain/providers/document-storage-provider";
 import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../domain/providers/state-provider";
+import type { IngestPart } from "../domain/model";
 import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
+import { ingestEmailPart } from "../domain/reactors/ingest-email";
 import { sendOtpEmail } from "./email";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
@@ -190,6 +192,20 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
     if (request.method === "GET" && segments[0] === "activity-log" && segments.length === 1) {
       return jsonResponse(await provider.listActivity());
+    }
+
+    if (request.method === "POST" && segments[0] === "ingest-email" && segments.length === 1) {
+      const token = bearerToken(request);
+      const expectedToken = process.env.EMAIL_INGEST_TOKEN;
+      if (!token || !expectedToken || token !== expectedToken) {
+        return jsonResponse({ error: "Unauthorized." }, { status: 401 });
+      }
+      const part = await readJson<IngestPart>(request);
+      const result = await ingestEmailPart(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), part);
+      if (result.status === "unknown_sender") {
+        return jsonResponse({ error: `Unknown sender: ${part.sender}` }, { status: 403 });
+      }
+      return jsonResponse(result);
     }
 
     throw new HttpError(404, `No API route for ${request.method} ${url.pathname}`);

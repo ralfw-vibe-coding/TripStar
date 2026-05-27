@@ -1,0 +1,152 @@
+{
+  "id": "oMQHdZ1oXg4q8Huv",
+  "name": "TripCal - Email Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "postProcessAction": "read",
+        "downloadAttachments": true,
+        "format": "resolved",
+        "options": {}
+      },
+      "id": "2ef1a9be-ea38-4233-98fc-ec088d712948",
+      "name": "Email Trigger",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [4592, -512],
+      "credentials": {
+        "imap": {
+          "id": "YKJuJLVJJWtkS4Ka",
+          "name": "tripcal-documents@work-with-ease.eu"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst json = item.json ?? {};\nconst binary = item.binary ?? {};\n\nconst from = typeof json.from === 'object'\n  ? json.from.text || json.from.value?.[0]?.address || ''\n  : (json.from || '');\nconst senderMatch = from.match(/<([^>]+)>/) || from.match(/([^\\s<>]+@[^\\s<>]+)/);\nconst sender = senderMatch ? senderMatch[1].trim().toLowerCase() : from.trim().toLowerCase();\n\nconst txId = String(json.messageId || json.messageID || json.uid || `${json.date || Date.now()}-${json.subject || 'email'}`);\nconst text = json.textPlain || json.text || json.bodyText || '';\n\nconst parts = [];\n\nfunction fileNameOf(key, meta) {\n  return String(meta.fileName || meta.fileNameDecoded || key);\n}\n\nfunction isPdfAttachment(key, meta) {\n  return fileNameOf(key, meta).trim().toLowerCase().endsWith('.pdf');\n}\n\nif (String(text).trim().length > 0) {\n  parts.push({\n    filename: 'email-body.txt',\n    mimeType: 'text/plain',\n    data: Buffer.from(text).toString('base64'),\n  });\n}\n\nfor (const [key, meta] of Object.entries(binary)) {\n  if (!isPdfAttachment(key, meta)) continue;\n  const buffer = await this.helpers.getBinaryDataBuffer(0, key);\n  parts.push({\n    filename: fileNameOf(key, meta),\n    mimeType: 'application/pdf',\n    data: buffer.toString('base64'),\n  });\n}\n\nif (parts.length === 0) return [];\n\nconst of = parts.length;\nreturn parts.map((doc, i) => ({\n  json: {\n    txId,\n    part: i + 1,\n    of,\n    sender,\n    document: doc,\n  },\n}));"
+      },
+      "id": "5ef2c35c-a72f-4e6d-9e1e-b2eaa367ddc1",
+      "name": "Normalize Email for TripCal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4864, -512]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => ({\n  json: {\n    tripcalUrl: 'https://ralfw-tripstar.netlify.app/api/ingest-email',\n    tripcalToken: 'c423b7d9-70d0-43c1-831e-7d6fd843e1b1',\n    payload: item.json,\n  },\n}));"
+      },
+      "id": "40c157d5-382d-446c-82d3-8aceff1c1a1d",
+      "name": "TripCal Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5120, -512],
+      "notesInFlow": true,
+      "notes": "Endpoint und Token fuer TripStar. tripcalUrl muss auf /api/ingest-email zeigen; tripcalToken muss zum Netlify Env EMAIL_INGEST_TOKEN passen."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.tripcalUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $json.tripcalToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "307f009d-21ab-4a17-ba16-11239ae2a79b",
+      "name": "Send to TripCal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5376, -512],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const responses = $input.all();\nconst configs = $('TripCal Config').all();\nconst failures = [];\n\nfor (let index = 0; index < responses.length; index += 1) {\n  const response = responses[index].json ?? {};\n  if (!response.error) continue;\n\n  const config = configs[index]?.json ?? configs[0]?.json ?? {};\n  const payload = config.payload ?? {};\n  const error = response.error;\n\n  failures.push({\n    json: {\n      sender: payload.sender || '',\n      txId: payload.txId || '',\n      filename: payload.document?.filename || null,\n      endpoint: config.tripcalUrl,\n      httpStatus: error.httpCode || error.statusCode || error.status || error.code || 'request_error',\n      httpStatusText: error.message || error.name || 'TripStar request failed',\n      responseBody: error.description || error.response?.body || error.stack || JSON.stringify(error),\n    },\n  });\n}\n\nreturn failures;"
+      },
+      "id": "438ed047-6e49-4208-99b4-427080336677",
+      "name": "Build TripCal Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5632, -512]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst sender = item.json.sender || '';\n\nconst body = [\n  'TripStar konnte eine weitergeleitete E-Mail nicht verarbeiten.',\n  '',\n  `Von: ${sender}`,\n  `TripStar Endpoint: ${item.json.endpoint}`,\n  '',\n  `HTTP Status: ${item.json.httpStatus} ${item.json.httpStatusText || ''}`.trim(),\n  '',\n  'Antwort der TripStar API:',\n  item.json.responseBody || '(keine Antwort)',\n  '',\n  item.json.filename ? `Dokument: ${item.json.filename}` : '',\n].filter((line) => line !== '').join('\\n');\n\nreturn [\n  {\n    json: {\n      toEmail: sender,\n      fromEmail: 'tripcal-documents@work-with-ease.eu',\n      subject: 'TripStar Fehler: Email-Ingest',\n      text: body,\n      headers: '',\n    },\n  },\n];"
+      },
+      "id": "a526b583-b43d-428b-b963-61f68f1c69a0",
+      "name": "Build Failure Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5904, -512]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.fromEmail }}",
+        "toEmail": "={{ $json.toEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "customEmailHeaders": "={{ $json.headers }}"
+        }
+      },
+      "id": "591c97b8-e834-4373-a36d-a2385fd4f960",
+      "name": "Send Failure Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [6160, -512],
+      "webhookId": "d1050c29-c509-440f-9324-16c9cac285ff",
+      "credentials": {
+        "smtp": {
+          "id": "SWIaHSzqzS9jstaU",
+          "name": "tripcal-documents@work-with-ease.eu SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Email Trigger": {
+      "main": [[{ "node": "Normalize Email for TripCal", "type": "main", "index": 0 }]]
+    },
+    "Normalize Email for TripCal": {
+      "main": [[{ "node": "TripCal Config", "type": "main", "index": 0 }]]
+    },
+    "TripCal Config": {
+      "main": [[{ "node": "Send to TripCal", "type": "main", "index": 0 }]]
+    },
+    "Send to TripCal": {
+      "main": [[{ "node": "Build TripCal Error", "type": "main", "index": 0 }]]
+    },
+    "Build TripCal Error": {
+      "main": [[{ "node": "Build Failure Email", "type": "main", "index": 0 }]]
+    },
+    "Build Failure Email": {
+      "main": [[{ "node": "Send Failure Email", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:Email Trigger": {
+      "lastMessageUid": 45
+    }
+  }
+}

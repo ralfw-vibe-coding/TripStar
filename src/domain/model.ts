@@ -140,6 +140,20 @@ export interface AnalysisJob {
   completedAt: string | null;
 }
 
+export interface IngestPartDocument {
+  data: string;
+  filename: string;
+  mimeType: string;
+}
+
+export interface IngestPart {
+  txId: string;
+  part: number;
+  of: number;
+  sender: string;
+  document: IngestPartDocument;
+}
+
 export interface CalendarBooking extends Booking {
   trip: Pick<Trip, "id" | "tripNumber" | "title" | "color"> | null;
 }

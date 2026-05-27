@@ -7,6 +7,7 @@ import type {
   CalendarView,
   DocumentRecord,
   Id,
+  IngestPart,
   OtpChallenge,
   Trip,
   User,
@@ -72,6 +73,7 @@ export class LocalStateProvider implements TripStarStateProvider {
   private activity: ActivityLogEntry[] = [];
   private otpChallenges: OtpChallenge[] = [];
   private authSessions: AuthSession[] = [];
+  private ingestParts: Map<string, Array<{ part: IngestPart; receivedAt: Date }>> = new Map();
   private now: () => Date;
   private stateFilePath: string | null;
   private initialTripNumber: number;
@@ -457,6 +459,40 @@ export class LocalStateProvider implements TripStarStateProvider {
 
   async listActivity(): Promise<ActivityLogEntry[]> {
     return clone(this.activity);
+  }
+
+  async findUserByEmail(email: string): Promise<User | null> {
+    return this.users.find((u) => u.email === email.trim().toLowerCase()) ?? null;
+  }
+
+  async findDocumentByEmailMessageId(messageId: string): Promise<DocumentRecord | null> {
+    return this.documents.find((d) => d.sourceEmailIngestId === messageId && d.deletedAt === null) ?? null;
+  }
+
+  async storeIngestPart(part: IngestPart): Promise<void> {
+    const existing = this.ingestParts.get(part.txId) ?? [];
+    existing.push({ part, receivedAt: this.now() });
+    this.ingestParts.set(part.txId, existing);
+  }
+
+  async getIngestParts(txId: string): Promise<IngestPart[]> {
+    return (this.ingestParts.get(txId) ?? []).map((e) => e.part);
+  }
+
+  async deleteIngestParts(txId: string): Promise<void> {
+    this.ingestParts.delete(txId);
+  }
+
+  async purgeStaleIngestParts(olderThanMinutes: number): Promise<number> {
+    const cutoff = new Date(this.now().getTime() - olderThanMinutes * 60 * 1000);
+    let count = 0;
+    for (const [txId, entries] of this.ingestParts.entries()) {
+      if (entries.every((e) => e.receivedAt < cutoff)) {
+        count += entries.length;
+        this.ingestParts.delete(txId);
+      }
+    }
+    return count;
   }
 
   async getCalendarView(now: Date = this.now()): Promise<CalendarView> {
