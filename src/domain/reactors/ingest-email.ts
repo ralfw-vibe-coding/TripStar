@@ -2,6 +2,7 @@ import type { DocumentRecord, IngestPart } from "../model";
 import type { AnalyzedBookingInput, BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
+import { withUserId } from "../providers/user-context";
 import { sendIngestErrorEmail } from "../../server/email";
 import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
 
@@ -22,63 +23,61 @@ export async function receiveIngestPart(
 ): Promise<ReceiveIngestPartResult> {
   const sender = part.sender.trim().toLowerCase();
 
-  // Look up the user first so every log entry can carry userId.
+  // Look up the user first so every log entry can carry the correct userId via AsyncLocalStorage.
   const user = await state.findUserByEmail(sender);
   const userId = user?.id ?? null;
 
-  await state.appendActivity({
-    level: "info",
-    scope: "inbox",
-    message: `[Inbox] Received part ${part.part}/${part.of} from ${sender || "(no sender)"}: ${part.document.filename}`,
-    documentName: part.document.filename,
-    userId,
-    details: { txId: part.txId, sender, part: part.part, of: part.of, mimeType: part.document.mimeType },
-  });
-
-  if (!user) {
+  return withUserId(userId, async () => {
     await state.appendActivity({
-      level: "warn",
+      level: "info",
       scope: "inbox",
-      message: `[Inbox] Unknown sender, rejected: ${sender || "(empty)"}`,
-      documentName: null,
-      userId: null,
-      details: { txId: part.txId, sender },
+      message: `[Inbox] Received part ${part.part}/${part.of} from ${sender || "(no sender)"}: ${part.document.filename}`,
+      documentName: part.document.filename,
+      details: { txId: part.txId, sender, part: part.part, of: part.of, mimeType: part.document.mimeType },
     });
-    return { status: "unknown_sender" };
-  }
 
-  const existing = await state.findDocumentByEmailMessageId(part.txId);
-  if (existing) {
-    if (part.part === part.of) {
+    if (!user) {
       await state.appendActivity({
         level: "warn",
         scope: "inbox",
-        message: `[Inbox] Duplicate email ignored: ${part.txId}`,
+        message: `[Inbox] Unknown sender, rejected: ${sender || "(empty)"}`,
         documentName: null,
-        userId,
         details: { txId: part.txId, sender },
       });
+      return { status: "unknown_sender" };
     }
-    return { status: "duplicate" };
-  }
 
-  await state.storeIngestPart(part);
+    const existing = await state.findDocumentByEmailMessageId(part.txId);
+    if (existing) {
+      if (part.part === part.of) {
+        await state.appendActivity({
+          level: "warn",
+          scope: "inbox",
+          message: `[Inbox] Duplicate email ignored: ${part.txId}`,
+          documentName: null,
+          details: { txId: part.txId, sender },
+        });
+      }
+      return { status: "duplicate" };
+    }
 
-  const allParts = await state.getIngestParts(part.txId);
-  if (allParts.length < part.of) {
-    return { status: "part_received" };
-  }
+    await state.storeIngestPart(part);
 
-  await state.appendActivity({
-    level: "info",
-    scope: "inbox",
-    message: `[Inbox] All ${part.of} part(s) received for ${part.txId}, queuing analysis`,
-    documentName: null,
-    userId,
-    details: { txId: part.txId, sender },
+    const allParts = await state.getIngestParts(part.txId);
+    if (allParts.length < part.of) {
+      return { status: "part_received" };
+    }
+
+    await state.appendActivity({
+      level: "info",
+      scope: "inbox",
+      message: `[Inbox] All ${part.of} part(s) received for ${part.txId}, queuing analysis`,
+      documentName: null,
+      details: { txId: part.txId, sender },
+    });
+
+    return { status: "ready_to_process", userId: user.id };
   });
-
-  return { status: "ready_to_process", userId: user.id };
 }
 
 /**
@@ -96,7 +95,7 @@ export function queueIngestProcessing(
   userId: string,
 ): void {
   setTimeout(() => {
-    void processIngestEmail(state, storage, analyzer, txId, sender, userId);
+    void withUserId(userId, () => processIngestEmail(state, storage, analyzer, txId, sender, userId));
   }, 0);
 }
 
@@ -130,7 +129,6 @@ export async function processIngestEmail(
           scope: "inbox",
           message: `[Inbox] ${p.document.filename}: skipped (PDF attachment takes priority)`,
           documentName: p.document.filename,
-          userId,
           details: { txId, filename: p.document.filename },
         });
         continue;
@@ -144,7 +142,6 @@ export async function processIngestEmail(
           scope: "inbox",
           message: `[Inbox] ${p.document.filename}: ${result.bookings.length} booking(s) found`,
           documentName: p.document.filename,
-          userId,
           details: { txId, filename: p.document.filename, bookingCount: result.bookings.length },
         });
       } catch (error) {
@@ -154,7 +151,6 @@ export async function processIngestEmail(
           scope: "inbox",
           message: `[Inbox] Analysis failed for ${p.document.filename}: ${errorMessage}`,
           documentName: p.document.filename,
-          userId,
           details: { txId, filename: p.document.filename },
         });
         await sendIngestErrorEmail({ to: sender, errorMessage, filename: p.document.filename, txId });
@@ -186,7 +182,6 @@ export async function processIngestEmail(
           ? `[Inbox] Email processed, no bookings found`
           : `[Inbox] Email processed: ${bookings.length} booking(s) extracted`,
       documentName: null,
-      userId,
       details: { txId, sender, bookingCount: bookings.length },
     });
   } catch (error) {
@@ -196,7 +191,6 @@ export async function processIngestEmail(
       scope: "inbox",
       message: `[Inbox] Processing failed for ${txId}: ${errorMessage}`,
       documentName: null,
-      userId,
       details: { txId, sender },
     });
     await sendIngestErrorEmail({ to: sender, errorMessage, txId });

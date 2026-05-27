@@ -2,6 +2,7 @@ import type { AnalysisJob, Id } from "../model";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
+import { getCurrentUserId, withUserId } from "../providers/user-context";
 import { submitImageDocument, type SubmitImageDocumentInput } from "./submit-image-document";
 import { submitPdfDocuments, type SubmitPdfDocumentsInput } from "./submit-pdf-documents";
 import { submitTextDocument, type SubmitTextDocumentInput } from "./submit-text-document";
@@ -70,8 +71,9 @@ export async function processAnalysisJob(
 }
 
 function queueAnalysisJob(work: () => Promise<void>): void {
+  const userId = getCurrentUserId(); // capture current request's userId
   setTimeout(() => {
-    void work();
+    void withUserId(userId, work);
   }, 0);
 }
 
@@ -98,7 +100,6 @@ function appendAnalysisActivity(
     scope: "analysis",
     message: analysisMessage(job.documentName, status, bookingCount, error),
     documentName: job.documentName,
-    userId: job.currentUserId,
     details: {
       analysisJobId: job.id,
       status,

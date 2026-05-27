@@ -30,6 +30,7 @@ import { seedBookings, seedDocuments, seedTrips, seedUsers } from "./seed";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import { getCurrentUserId } from "../user-context";
 
 interface LocalStateProviderOptions {
   users?: User[];
@@ -446,10 +447,10 @@ export class LocalStateProvider implements TripStarStateProvider {
     return clone(job);
   }
 
-  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId"> & { userId?: string | null }): Promise<ActivityLogEntry> {
+  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId">): Promise<ActivityLogEntry> {
     const activity: ActivityLogEntry = {
       ...entry,
-      userId: entry.userId ?? null,
+      userId: getCurrentUserId(),
       id: createId("act"),
       timestamp: isoDate(this.now()),
     };

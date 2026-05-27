@@ -2,6 +2,7 @@ import type { BackgroundHandler, HandlerEvent } from "@netlify/functions";
 import { processIngestEmail } from "../../src/domain/reactors/ingest-email";
 import { getStateProvider } from "../../src/domain/provider-factory";
 import { createDocumentStorageProvider, createBookingAnalysisProvider } from "../../src/server/provider-factories";
+import { withUserId } from "../../src/domain/providers/user-context";
 
 /**
  * Netlify Background Function — runs for up to 15 minutes.
@@ -18,12 +19,14 @@ export const handler: BackgroundHandler = async (event: HandlerEvent) => {
   const { txId, sender, userId } = body;
   if (!txId || !sender || !userId) return;
 
-  await processIngestEmail(
-    getStateProvider(),
-    createDocumentStorageProvider(),
-    createBookingAnalysisProvider(),
-    txId,
-    sender,
-    userId,
+  await withUserId(userId, () =>
+    processIngestEmail(
+      getStateProvider(),
+      createDocumentStorageProvider(),
+      createBookingAnalysisProvider(),
+      txId,
+      sender,
+      userId,
+    ),
   );
 };

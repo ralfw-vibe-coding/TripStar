@@ -125,7 +125,7 @@ export interface TripStarStateProvider {
   createAnalysisJob(input: CreateAnalysisJobInput): Promise<AnalysisJob>;
   updateAnalysisJob(id: Id, input: UpdateAnalysisJobInput): Promise<AnalysisJob>;
 
-  appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId"> & { userId?: string | null }): Promise<ActivityLogEntry>;
+  appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId">): Promise<ActivityLogEntry>; // userId injected via AsyncLocalStorage
   listActivity(userId: string): Promise<ActivityLogEntry[]>;
 
   getCalendarView(now?: Date): Promise<CalendarView>;

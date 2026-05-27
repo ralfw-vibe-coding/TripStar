@@ -27,6 +27,7 @@ import type {
   VerifyOtpResult,
 } from "../state-provider";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import { getCurrentUserId } from "../user-context";
 
 type Sql = NeonQueryFunction<false, false>;
 
@@ -438,11 +439,11 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return clone(updated);
   }
 
-  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId"> & { userId?: string | null }): Promise<ActivityLogEntry> {
+  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId">): Promise<ActivityLogEntry> {
     await this.ready;
     const activity: ActivityLogEntry = {
       ...entry,
-      userId: entry.userId ?? null,
+      userId: getCurrentUserId(),
       id: `act_${randomUUID()}`,
       timestamp: this.nowIso(),
     };

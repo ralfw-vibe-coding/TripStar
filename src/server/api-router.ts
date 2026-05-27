@@ -7,6 +7,7 @@ import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../do
 import type { IngestPart } from "../domain/model";
 import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
 import { receiveIngestPart, queueIngestProcessing } from "../domain/reactors/ingest-email";
+import { withUserId } from "../domain/providers/user-context";
 import { sendOtpEmail } from "./email";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
@@ -15,11 +16,16 @@ import { createBookingAnalysisProvider, createDocumentStorageProvider } from "./
 loadLocalEnv();
 
 export async function handleApiRequest(request: Request): Promise<Response> {
+  const provider = getStateProvider();
+  const token = bearerToken(request);
+  const authResult = token ? await provider.getAuthSession(token) : null;
+  const currentUserId = authResult?.user.id ?? null;
+
+  return withUserId(currentUserId, async () => {
   try {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api\/?/, "");
     const segments = path.split("/").filter(Boolean);
-    const provider = getStateProvider();
 
     if (segments[0] === "auth") {
       if (request.method === "POST" && segments.length === 2 && segments[1] === "request-otp") {
@@ -56,7 +62,6 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
 
       if (request.method === "POST" && segments.length === 2 && segments[1] === "logout") {
-        const token = bearerToken(request);
         if (token) {
           await provider.revokeAuthSession(token);
         }
@@ -194,7 +199,6 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === "POST" && segments[0] === "ingest-email" && segments.length === 1) {
-      const token = bearerToken(request);
       const expectedToken = process.env.EMAIL_INGEST_TOKEN;
       if (!expectedToken) {
         await provider.appendActivity({
@@ -206,7 +210,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
         return jsonResponse({ error: "Unauthorized." }, { status: 401 });
       }
-      if (!token || token !== expectedToken) {
+      if (!token || token !== expectedToken) { // token = outer bearerToken(request)
         await provider.appendActivity({
           level: "warn",
           scope: "inbox",
@@ -231,6 +235,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   } catch (error) {
     return errorResponse(error);
   }
+  }); // withUserId
 }
 
 function bearerToken(request: Request): string | null {
