@@ -75,8 +75,13 @@ export async function receiveIngestPart(
 }
 
 /**
- * Slow phase — fire-and-forget via setTimeout, runs after the HTTP response is sent.
+ * Slow phase — runs after the HTTP response is sent.
  * Calls OpenAI, stores documents, creates bookings, cleans up.
+ *
+ * When a `waitUntil` callback is provided (e.g. from Netlify's context.waitUntil),
+ * the promise is registered with it so the serverless runtime keeps the function
+ * alive until processing completes.  Without it (local dev) we fall back to
+ * setTimeout so the work still runs after the response is returned.
  */
 export function queueIngestProcessing(
   state: TripStarStateProvider,
@@ -85,10 +90,15 @@ export function queueIngestProcessing(
   txId: string,
   sender: string,
   userId: string,
+  waitUntil?: (promise: Promise<void>) => void,
 ): void {
-  setTimeout(() => {
-    void processIngestEmail(state, storage, analyzer, txId, sender, userId);
-  }, 0);
+  if (waitUntil) {
+    waitUntil(processIngestEmail(state, storage, analyzer, txId, sender, userId));
+  } else {
+    setTimeout(() => {
+      void processIngestEmail(state, storage, analyzer, txId, sender, userId);
+    }, 0);
+  }
 }
 
 async function processIngestEmail(
@@ -108,8 +118,24 @@ async function processIngestEmail(
       return rank(a) - rank(b);
     });
 
+    const hasPdf = sortedParts.some((p) => p.document.mimeType === "application/pdf");
+
     const analyzedParts: Array<{ document: DocumentRecord; bookings: AnalyzedBookingInput[] }> = [];
     for (const p of sortedParts) {
+      // When a PDF attachment is present it is the authoritative source.
+      // Skip analysing the plain-text email body to save one OpenAI round-trip
+      // and avoid hitting Netlify's function timeout.
+      if (hasPdf && p.document.mimeType === "text/plain") {
+        await state.appendActivity({
+          level: "info",
+          scope: "inbox",
+          message: `[Inbox] ${p.document.filename}: skipped (PDF attachment takes priority)`,
+          documentName: p.document.filename,
+          details: { txId, filename: p.document.filename },
+        });
+        continue;
+      }
+
       try {
         const result = await analyzeAndStorePart(state, storage, analyzer, p, sender, txId);
         analyzedParts.push(result);

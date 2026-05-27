@@ -19,7 +19,7 @@ import { isAbsolute, join, resolve } from "node:path";
 
 loadLocalEnv();
 
-export async function handleApiRequest(request: Request): Promise<Response> {
+export async function handleApiRequest(request: Request, waitUntil?: (promise: Promise<void>) => void): Promise<Response> {
   try {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api\/?/, "");
@@ -223,7 +223,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         return jsonResponse({ error: `Unknown sender: ${part.sender}` }, { status: 403 });
       }
       if (received.status === "ready_to_process") {
-        queueIngestProcessing(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), part.txId, part.sender, received.userId);
+        queueIngestProcessing(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), part.txId, part.sender, received.userId, waitUntil);
       }
       return jsonResponse({ status: received.status }, { status: 202 });
     }
