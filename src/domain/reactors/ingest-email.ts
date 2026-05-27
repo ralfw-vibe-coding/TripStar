@@ -2,25 +2,24 @@ import type { DocumentRecord, IngestPart } from "../model";
 import type { AnalyzedBookingInput, BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
+import { sendIngestErrorEmail } from "../../server/email";
 import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
 
-export type IngestEmailResult =
+export type ReceiveIngestPartResult =
   | { status: "part_received" }
   | { status: "duplicate" }
   | { status: "unknown_sender" }
-  | { status: "complete"; bookingCount: number };
+  | { status: "ready_to_process"; userId: string };
 
-interface AnalyzedPart {
-  document: DocumentRecord;
-  bookings: AnalyzedBookingInput[];
-}
-
-export async function ingestEmailPart(
+/**
+ * Fast phase — runs synchronously within the HTTP request.
+ * Logs receipt, validates sender, checks idempotency, stores the part.
+ * Returns immediately; does NOT call OpenAI.
+ */
+export async function receiveIngestPart(
   state: TripStarStateProvider,
-  storage: DocumentStorageProvider,
-  analyzer: BookingAnalysisProvider,
   part: IngestPart,
-): Promise<IngestEmailResult> {
+): Promise<ReceiveIngestPartResult> {
   const sender = part.sender.trim().toLowerCase();
 
   await state.appendActivity({
@@ -67,69 +66,111 @@ export async function ingestEmailPart(
   await state.appendActivity({
     level: "info",
     scope: "inbox",
-    message: `[Inbox] All ${part.of} part(s) received for ${part.txId}, starting analysis`,
+    message: `[Inbox] All ${part.of} part(s) received for ${part.txId}, queuing analysis`,
     documentName: null,
     details: { txId: part.txId, sender },
   });
 
-  // Sort: PDFs first (more authoritative than email body text)
-  const sortedParts = [...allParts].sort((a, b) => {
-    const rank = (p: IngestPart) => (p.document.mimeType === "application/pdf" ? 0 : 1);
-    return rank(a) - rank(b);
-  });
+  return { status: "ready_to_process", userId: user.id };
+}
 
-  const analyzedParts: AnalyzedPart[] = [];
-  for (const p of sortedParts) {
-    try {
-      const { document, bookings } = await analyzeAndStorePart(state, storage, analyzer, p, sender, part.txId);
-      analyzedParts.push({ document, bookings });
-      await state.appendActivity({
-        level: "info",
-        scope: "inbox",
-        message: `[Inbox] ${p.document.filename}: ${bookings.length} booking(s) found`,
-        documentName: p.document.filename,
-        details: { txId: part.txId, filename: p.document.filename, bookingCount: bookings.length },
-      });
-    } catch (error) {
-      await state.appendActivity({
-        level: "error",
-        scope: "inbox",
-        message: `[Inbox] Analysis failed for ${p.document.filename}: ${error instanceof Error ? error.message : String(error)}`,
-        documentName: p.document.filename,
-        details: { txId: part.txId, filename: p.document.filename },
-      });
+/**
+ * Slow phase — fire-and-forget via setTimeout, runs after the HTTP response is sent.
+ * Calls OpenAI, stores documents, creates bookings, cleans up.
+ */
+export function queueIngestProcessing(
+  state: TripStarStateProvider,
+  storage: DocumentStorageProvider,
+  analyzer: BookingAnalysisProvider,
+  txId: string,
+  sender: string,
+  userId: string,
+): void {
+  setTimeout(() => {
+    void processIngestEmail(state, storage, analyzer, txId, sender, userId);
+  }, 0);
+}
+
+async function processIngestEmail(
+  state: TripStarStateProvider,
+  storage: DocumentStorageProvider,
+  analyzer: BookingAnalysisProvider,
+  txId: string,
+  sender: string,
+  userId: string,
+): Promise<void> {
+  try {
+    const allParts = await state.getIngestParts(txId);
+
+    // PDFs first (more authoritative than email body text)
+    const sortedParts = [...allParts].sort((a, b) => {
+      const rank = (p: IngestPart) => (p.document.mimeType === "application/pdf" ? 0 : 1);
+      return rank(a) - rank(b);
+    });
+
+    const analyzedParts: Array<{ document: DocumentRecord; bookings: AnalyzedBookingInput[] }> = [];
+    for (const p of sortedParts) {
+      try {
+        const result = await analyzeAndStorePart(state, storage, analyzer, p, sender, txId);
+        analyzedParts.push(result);
+        await state.appendActivity({
+          level: "info",
+          scope: "inbox",
+          message: `[Inbox] ${p.document.filename}: ${result.bookings.length} booking(s) found`,
+          documentName: p.document.filename,
+          details: { txId, filename: p.document.filename, bookingCount: result.bookings.length },
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await state.appendActivity({
+          level: "error",
+          scope: "inbox",
+          message: `[Inbox] Analysis failed for ${p.document.filename}: ${errorMessage}`,
+          documentName: p.document.filename,
+          details: { txId, filename: p.document.filename },
+        });
+        await sendIngestErrorEmail({ to: sender, errorMessage, filename: p.document.filename, txId });
+      }
     }
+
+    const mergedBookings = mergeAcrossParts(analyzedParts);
+    const bookings =
+      mergedBookings.length > 0
+        ? await state.createBookings(
+            mergedBookings.map(({ booking, document }) => ({
+              ...booking,
+              tripId: null,
+              sourceDocumentId: document.id,
+              participantUserIds: [userId],
+              status: "inbox" as const,
+            })),
+          )
+        : [];
+
+    await state.deleteIngestParts(txId);
+    await state.purgeStaleIngestParts(60);
+
+    await state.appendActivity({
+      level: "info",
+      scope: "inbox",
+      message:
+        bookings.length === 0
+          ? `[Inbox] Email processed, no bookings found`
+          : `[Inbox] Email processed: ${bookings.length} booking(s) extracted`,
+      documentName: null,
+      details: { txId, sender, bookingCount: bookings.length },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await state.appendActivity({
+      level: "error",
+      scope: "inbox",
+      message: `[Inbox] Processing failed for ${txId}: ${errorMessage}`,
+      documentName: null,
+      details: { txId, sender },
+    });
+    await sendIngestErrorEmail({ to: sender, errorMessage, txId });
   }
-
-  const mergedBookings = mergeAcrossParts(analyzedParts);
-  const bookings =
-    mergedBookings.length > 0
-      ? await state.createBookings(
-          mergedBookings.map(({ booking, document }) => ({
-            ...booking,
-            tripId: null,
-            sourceDocumentId: document.id,
-            participantUserIds: [user.id],
-            status: "inbox" as const,
-          })),
-        )
-      : [];
-
-  await state.deleteIngestParts(part.txId);
-  await state.purgeStaleIngestParts(60);
-
-  await state.appendActivity({
-    level: "info",
-    scope: "inbox",
-    message:
-      bookings.length === 0
-        ? `[Inbox] Email processed, no bookings found`
-        : `[Inbox] Email processed: ${bookings.length} booking(s) extracted`,
-    documentName: null,
-    details: { txId: part.txId, sender, bookingCount: bookings.length },
-  });
-
-  return { status: "complete", bookingCount: bookings.length };
 }
 
 async function analyzeAndStorePart(
@@ -139,7 +180,7 @@ async function analyzeAndStorePart(
   p: IngestPart,
   sender: string,
   txId: string,
-): Promise<AnalyzedPart> {
+): Promise<{ document: DocumentRecord; bookings: AnalyzedBookingInput[] }> {
   if (p.document.mimeType === "text/plain") {
     const text = Buffer.from(p.document.data, "base64").toString("utf-8");
     const bookings = await analyzer.analyzeText(text);
@@ -177,11 +218,12 @@ async function analyzeAndStorePart(
 }
 
 /**
- * Merge bookings from multiple parts into a deduplicated list.
- * PDFs come first (higher priority). A booking from a lower-priority source
- * is dropped if a booking with the same route+time already exists.
+ * Merge bookings from multiple parts. PDFs come first (higher priority).
+ * A booking from a lower-priority source is dropped if the same route+time exists already.
  */
-function mergeAcrossParts(parts: AnalyzedPart[]): Array<{ booking: AnalyzedBookingInput; document: DocumentRecord }> {
+function mergeAcrossParts(
+  parts: Array<{ document: DocumentRecord; bookings: AnalyzedBookingInput[] }>,
+): Array<{ booking: AnalyzedBookingInput; document: DocumentRecord }> {
   const result: Array<{ booking: AnalyzedBookingInput; document: DocumentRecord; routeKey: string }> = [];
 
   for (const { document, bookings } of parts) {
@@ -191,17 +233,17 @@ function mergeAcrossParts(parts: AnalyzedPart[]): Array<{ booking: AnalyzedBooki
       if (existingIndex === -1) {
         result.push({ booking, document, routeKey: rk });
       } else {
-        // Prefer the one with more information (serviceIdentifier, longer details)
         const existing = result[existingIndex];
         const currentScore = detailScore(booking);
         const existingScore = detailScore(existing.booking);
-        if (currentScore > existingScore) {
-          result[existingIndex] = { booking, document, routeKey: rk };
-        }
-        // Also merge travelers from both versions
-        result[existingIndex].booking = {
-          ...result[existingIndex].booking,
-          travelers: unique([...result[existingIndex].booking.travelers, ...booking.travelers]),
+        const winner = currentScore > existingScore ? { booking, document } : { booking: existing.booking, document: existing.document };
+        result[existingIndex] = {
+          ...winner,
+          routeKey: rk,
+          booking: {
+            ...winner.booking,
+            travelers: unique([...existing.booking.travelers, ...booking.travelers]),
+          },
         };
       }
     }
@@ -213,7 +255,6 @@ function mergeAcrossParts(parts: AnalyzedPart[]): Array<{ booking: AnalyzedBooki
 function routeTimeKey(booking: AnalyzedBookingInput): string {
   const fromCode = extractLocationCode(booking.fromText);
   const toCode = extractLocationCode(booking.toText);
-  // Match within the same hour: "2026-12-21T21" — covers timezone rounding
   const startHour = (booking.startAt ?? "").slice(0, 13);
   return `${booking.type}|${startHour}|${fromCode}|${toCode}`;
 }

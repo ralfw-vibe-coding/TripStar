@@ -10,7 +10,7 @@ import type { DocumentStorageProvider } from "../domain/providers/document-stora
 import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../domain/providers/state-provider";
 import type { IngestPart } from "../domain/model";
 import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
-import { ingestEmailPart } from "../domain/reactors/ingest-email";
+import { receiveIngestPart, queueIngestProcessing } from "../domain/reactors/ingest-email";
 import { sendOtpEmail } from "./email";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
@@ -218,11 +218,14 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         return jsonResponse({ error: "Unauthorized." }, { status: 401 });
       }
       const part = await readJson<IngestPart>(request);
-      const result = await ingestEmailPart(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), part);
-      if (result.status === "unknown_sender") {
+      const received = await receiveIngestPart(provider, part);
+      if (received.status === "unknown_sender") {
         return jsonResponse({ error: `Unknown sender: ${part.sender}` }, { status: 403 });
       }
-      return jsonResponse(result);
+      if (received.status === "ready_to_process") {
+        queueIngestProcessing(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), part.txId, part.sender, received.userId);
+      }
+      return jsonResponse({ status: received.status }, { status: 202 });
     }
 
     throw new HttpError(404, `No API route for ${request.method} ${url.pathname}`);
