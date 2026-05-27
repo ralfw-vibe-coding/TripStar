@@ -1340,8 +1340,8 @@ function usersForIds(users: User[], userIds: string[]): User[] {
 }
 
 function AnalysisProtocol({ entries, jobs }: { entries: ActivityLogEntry[]; jobs: AnalysisJob[] }) {
-  const stagedEntries = entries.filter((entry) => entry.scope === "analysis");
-  const fallbackEntries = entries.filter((entry) => entry.scope === "documents");
+  const stagedEntries = entries.filter((entry) => entry.scope === "analysis" || entry.scope === "inbox");
+  const fallbackEntries = entries.filter((entry) => entry.scope === "documents" || entry.scope === "inbox");
   const analysisEntries = (stagedEntries.length > 0 ? stagedEntries : fallbackEntries).slice(0, 18);
   const hasRunningJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
   return (
@@ -1417,6 +1417,7 @@ function protocolSource(entry: ActivityLogEntry, sourceType: AnalysisJob["source
   if (sourceType === "screenshot") return "SCREEN";
   if (sourceType === "text") return "TEXT";
   if (sourceType === "pdf") return "PDF";
+  if (entry.scope === "inbox") return "EMAIL";
   if (entry.documentName === "Clipboard screenshot") return "SCREEN";
   if (entry.documentName === "Texteingabe") return "TEXT";
   return "DOC";

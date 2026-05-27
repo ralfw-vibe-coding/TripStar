@@ -98,6 +98,7 @@ function appendAnalysisActivity(
     scope: "analysis",
     message: analysisMessage(job.documentName, status, bookingCount, error),
     documentName: job.documentName,
+    userId: job.currentUserId,
     details: {
       analysisJobId: job.id,
       status,

@@ -446,9 +446,10 @@ export class LocalStateProvider implements TripStarStateProvider {
     return clone(job);
   }
 
-  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp">): Promise<ActivityLogEntry> {
+  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId"> & { userId?: string | null }): Promise<ActivityLogEntry> {
     const activity: ActivityLogEntry = {
       ...entry,
+      userId: entry.userId ?? null,
       id: createId("act"),
       timestamp: isoDate(this.now()),
     };
@@ -457,8 +458,8 @@ export class LocalStateProvider implements TripStarStateProvider {
     return clone(activity);
   }
 
-  async listActivity(): Promise<ActivityLogEntry[]> {
-    return clone(this.activity);
+  async listActivity(userId: string): Promise<ActivityLogEntry[]> {
+    return clone(this.activity.filter((e) => e.userId === userId || e.userId == null));
   }
 
   async findUserByEmail(email: string): Promise<User | null> {

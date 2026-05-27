@@ -77,7 +77,7 @@ describe("LocalStateProvider", () => {
       sharedWithUserIds: ["user_mara"],
       color: "",
     });
-    await expect(provider.listActivity()).resolves.toHaveLength(1);
+    await expect(provider.listActivity("test-user")).resolves.toHaveLength(1);
   });
 
   it("uses the generated trip number as title when no title is provided", async () => {
@@ -427,7 +427,7 @@ describe("LocalStateProvider", () => {
     await expect(provider.listBookings()).resolves.toEqual([]);
     await expect(provider.deleteDocument("document_1")).resolves.toMatchObject({ deletedAt: fixedIso });
     await expect(provider.listDocuments()).resolves.toEqual([]);
-    await expect(provider.listActivity()).resolves.toEqual(
+    await expect(provider.listActivity("test-user")).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ scope: "booking", message: "Deleted booking Hotel reservation" }),
         expect.objectContaining({ scope: "document", message: "Deleted document after last booking was removed" }),

@@ -438,10 +438,11 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return clone(updated);
   }
 
-  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp">): Promise<ActivityLogEntry> {
+  async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId"> & { userId?: string | null }): Promise<ActivityLogEntry> {
     await this.ready;
     const activity: ActivityLogEntry = {
       ...entry,
+      userId: entry.userId ?? null,
       id: `act_${randomUUID()}`,
       timestamp: this.nowIso(),
     };
@@ -452,9 +453,13 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return clone(activity);
   }
 
-  async listActivity(): Promise<ActivityLogEntry[]> {
+  async listActivity(userId: string): Promise<ActivityLogEntry[]> {
     await this.ready;
-    const rows = await this.sql`select data from activity_log order by timestamp desc limit 500`;
+    const rows = await this.sql`
+      select data from activity_log
+      where data->>'userId' = ${userId} or data->>'userId' is null
+      order by timestamp desc limit 200
+    `;
     return rows.map((row) => row.data as ActivityLogEntry);
   }
 

@@ -137,7 +137,7 @@ describe("submitTextDocument", () => {
       }),
     ).rejects.toThrow("analysis down");
 
-    await expect(state.listActivity()).resolves.toEqual([
+    await expect(state.listActivity("test-user")).resolves.toEqual([
       expect.objectContaining({
         level: "error",
         scope: "documents",

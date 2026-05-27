@@ -105,7 +105,7 @@ describe("submitPdfDocuments", () => {
 
     expect(result.documents).toHaveLength(1);
     expect(result.bookings).toEqual([]);
-    await expect(state.listActivity()).resolves.toEqual([
+    await expect(state.listActivity("test-user")).resolves.toEqual([
       expect.objectContaining({
         scope: "documents",
         message: "PDF analyzed, no bookings extracted",
@@ -161,7 +161,7 @@ describe("submitPdfDocuments", () => {
     });
 
     expect(result.bookings).toHaveLength(1);
-    await expect(state.listActivity()).resolves.toEqual([
+    await expect(state.listActivity("test-user")).resolves.toEqual([
       expect.objectContaining({
         message: "PDF analyzed, created 1 booking",
         details: expect.objectContaining({ bookingCount: 1, extractedBookingCount: 2 }),
@@ -216,7 +216,7 @@ describe("submitPdfDocuments", () => {
     await expect(state.listDocuments()).resolves.toEqual([
       expect.objectContaining({ originalFileName: "failed.pdf", processingStatus: "failed" }),
     ]);
-    await expect(state.listActivity()).resolves.toEqual([
+    await expect(state.listActivity("test-user")).resolves.toEqual([
       expect.objectContaining({ level: "error", scope: "documents", message: "PDF analysis failed" }),
     ]);
   });

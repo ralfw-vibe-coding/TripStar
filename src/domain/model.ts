@@ -120,6 +120,7 @@ export interface ActivityLogEntry {
   message: string;
   documentName: string | null;
   details: unknown | null;
+  userId: string | null;
 }
 
 export type AnalysisJobStatus = "queued" | "running" | "done" | "failed";

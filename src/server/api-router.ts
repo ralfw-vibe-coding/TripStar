@@ -186,7 +186,11 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === "GET" && segments[0] === "activity-log" && segments.length === 1) {
-      return jsonResponse(await provider.listActivity());
+      const user = await getCurrentUser(provider, bearerToken(request));
+      if (!user) {
+        return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      }
+      return jsonResponse(await provider.listActivity(user.id));
     }
 
     if (request.method === "POST" && segments[0] === "ingest-email" && segments.length === 1) {
