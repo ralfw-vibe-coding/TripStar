@@ -26,6 +26,8 @@ export interface FlightExtraction {
   departureAtLocal: string | null;
   arrivalAtLocal: string | null;
   boardingAtLocal: string | null;
+  departureTimeZone: string | null;
+  arrivalTimeZone: string | null;
   bookingReference: string | null;
   ticketNumber: string | null;
   passengers: string[];
@@ -41,6 +43,8 @@ export interface TrainExtraction {
   toStation: string | null;
   departureAtLocal: string | null;
   arrivalAtLocal: string | null;
+  departureTimeZone: string | null;
+  arrivalTimeZone: string | null;
   bookingReference: string | null;
   passengers: string[];
   seats: string[];
@@ -52,6 +56,7 @@ export interface LodgingExtraction {
   city: string | null;
   checkInAtLocal: string | null;
   checkOutAtLocal: string | null;
+  timeZone: string | null;
   bookingReference: string | null;
   guests: string[];
   phone: string | null;
@@ -65,6 +70,8 @@ export interface GenericTypedExtraction {
   toText: string | null;
   startAtLocal: string | null;
   endAtLocal: string | null;
+  startTimeZone: string | null;
+  endTimeZone: string | null;
   people: string[];
 }
 
@@ -113,8 +120,8 @@ function projectionFor(
   if (extracted.type === "flight" && extracted.flight) {
     const flight = extracted.flight;
     const routeTitle = compact([airportShortLabel(flight.departure), airportShortLabel(flight.arrival)]).join(" -> ");
-    const departureTimeZone = airportTimeZone(flight.departure);
-    const arrivalTimeZone = airportTimeZone(flight.arrival);
+    const departureTimeZone = flight.departureTimeZone ?? airportTimeZone(flight.departure);
+    const arrivalTimeZone = flight.arrivalTimeZone ?? airportTimeZone(flight.arrival);
     const fromText = airportConciseLabel(flight.departure);
     const toText = airportConciseLabel(flight.arrival);
     const departure = createBookingTimePoint({
@@ -147,11 +154,27 @@ function projectionFor(
   if (extracted.type === "train" && extracted.train) {
     const train = extracted.train;
     const routeTitle = compact([train.fromStation, train.toStation]).join(" -> ");
+    const departureTimeZone = train.departureTimeZone ?? null;
+    const arrivalTimeZone = train.arrivalTimeZone ?? null;
+    const departure = createBookingTimePoint({
+      label: "departure",
+      localDateTime: train.departureAtLocal,
+      timeZone: departureTimeZone,
+      placeText: train.fromStation,
+      currentYear: options.currentYear,
+    });
+    const arrival = createBookingTimePoint({
+      label: "arrival",
+      localDateTime: train.arrivalAtLocal,
+      timeZone: arrivalTimeZone,
+      placeText: train.toStation,
+      currentYear: options.currentYear,
+    });
     return {
       title: routeTitle || extracted.summary || "Train",
-      startAt: options.normalizeDateTime(train.departureAtLocal, options.currentYear),
-      endAt: options.normalizeDateTime(train.arrivalAtLocal, options.currentYear),
-      timePoints: [],
+      startAt: departure?.instant ?? options.normalizeDateTime(train.departureAtLocal, options.currentYear, departureTimeZone),
+      endAt: arrival?.instant ?? options.normalizeDateTime(train.arrivalAtLocal, options.currentYear, arrivalTimeZone),
+      timePoints: compactTimePoints([departure, arrival]),
       fromText: train.fromStation,
       toText: train.toStation,
       travelers: train.passengers,
@@ -162,11 +185,27 @@ function projectionFor(
 
   if (extracted.type === "lodging" && extracted.lodging) {
     const lodging = extracted.lodging;
+    const timeZone = lodging.timeZone ?? null;
+    const placeText = lodging.city ?? lodging.address;
+    const checkIn = createBookingTimePoint({
+      label: "check_in",
+      localDateTime: lodging.checkInAtLocal,
+      timeZone,
+      placeText,
+      currentYear: options.currentYear,
+    });
+    const checkOut = createBookingTimePoint({
+      label: "check_out",
+      localDateTime: lodging.checkOutAtLocal,
+      timeZone,
+      placeText,
+      currentYear: options.currentYear,
+    });
     return {
       title: lodging.propertyName ?? extracted.summary ?? "Lodging",
-      startAt: options.normalizeDateTime(lodging.checkInAtLocal, options.currentYear),
-      endAt: options.normalizeDateTime(lodging.checkOutAtLocal, options.currentYear),
-      timePoints: [],
+      startAt: checkIn?.instant ?? options.normalizeDateTime(lodging.checkInAtLocal, options.currentYear, timeZone),
+      endAt: checkOut?.instant ?? options.normalizeDateTime(lodging.checkOutAtLocal, options.currentYear, timeZone),
+      timePoints: compactTimePoints([checkIn, checkOut]),
       fromText: lodging.address,
       toText: lodging.city,
       travelers: lodging.guests,
@@ -176,11 +215,27 @@ function projectionFor(
   }
 
   const generic = extracted.rentalCar ?? extracted.ferry ?? extracted.event ?? extracted.other;
+  const startTimeZone = generic?.startTimeZone ?? null;
+  const endTimeZone = generic?.endTimeZone ?? null;
+  const start = createBookingTimePoint({
+    label: "start",
+    localDateTime: generic?.startAtLocal ?? null,
+    timeZone: startTimeZone,
+    placeText: generic?.fromText ?? null,
+    currentYear: options.currentYear,
+  });
+  const end = createBookingTimePoint({
+    label: "end",
+    localDateTime: generic?.endAtLocal ?? null,
+    timeZone: endTimeZone,
+    placeText: generic?.toText ?? null,
+    currentYear: options.currentYear,
+  });
   return {
     title: extracted.summary || titleForType(extracted.type),
-    startAt: options.normalizeDateTime(generic?.startAtLocal ?? null, options.currentYear),
-    endAt: options.normalizeDateTime(generic?.endAtLocal ?? null, options.currentYear),
-    timePoints: [],
+    startAt: start?.instant ?? options.normalizeDateTime(generic?.startAtLocal ?? null, options.currentYear, startTimeZone),
+    endAt: end?.instant ?? options.normalizeDateTime(generic?.endAtLocal ?? null, options.currentYear, endTimeZone),
+    timePoints: compactTimePoints([start, end]),
     fromText: generic?.fromText ?? null,
     toText: generic?.toText ?? null,
     travelers: generic?.people ?? [],

@@ -82,7 +82,7 @@ export class OpenAIBookingAnalysisProvider implements BookingAnalysisProvider {
           {
             role: "system",
             content:
-              `Extract travel bookings from the user's document into type-specific JSON. Return only JSON matching the requested schema. If no bookings are present, return an empty bookings array. Use exactly one type-specific object per booking and set the others to null. For flights, prefer structured flight data over prose: flight number, airline, airport IATA codes, airport names, cities, terminals, gates, departure and arrival times, booking reference, ticket number, passengers, seats, cabin, and baggage. Airport IATA codes are important: if the document names an airport or city and the commercial airport code is well-known, infer the IATA code and add a warning that it was inferred; leave it null only when genuinely uncertain. Preserve extra useful source information in importantDetails. Add evidence entries for important fields using short source excerpts. Add warnings when a value is inferred, ambiguous, or missing. If a booking date has no year, assume ${currentYear}. Return date/time values as ISO 8601 strings whenever possible; otherwise keep the source date string so it can be normalized later.`,
+              `Extract travel bookings from the user's document into type-specific JSON. Return only JSON matching the requested schema. If no bookings are present, return an empty bookings array. Use exactly one type-specific object per booking and set the others to null. For flights, prefer structured flight data over prose: flight number, airline, airport IATA codes, airport names, cities, terminals, gates, departure and arrival times, booking reference, ticket number, passengers, seats, cabin, and baggage. Airport IATA codes are important: if the document names an airport or city and the commercial airport code is well-known, infer the IATA code and add a warning that it was inferred; leave it null only when genuinely uncertain. For every date or time found, always include the IANA timezone identifier (e.g. "Europe/Berlin", "Asia/Hong_Kong", "America/New_York") for the location where that time applies — derive it from the city, country, address, airport code, or any other location hint present in the document; leave null only when genuinely uncertain. Preserve extra useful source information in importantDetails. Add evidence entries for important fields using short source excerpts. Add warnings when a value is inferred, ambiguous, or missing. If a booking date has no year, assume ${currentYear}. Return date/time values as ISO 8601 strings whenever possible; otherwise keep the source date string so it can be normalized later.`,
           },
           {
             role: "user",
@@ -149,6 +149,8 @@ function bookingExtractionSchema(): Record<string, unknown> {
       "departureAtLocal",
       "arrivalAtLocal",
       "boardingAtLocal",
+      "departureTimeZone",
+      "arrivalTimeZone",
       "bookingReference",
       "ticketNumber",
       "passengers",
@@ -165,6 +167,8 @@ function bookingExtractionSchema(): Record<string, unknown> {
       departureAtLocal: stringOrNull,
       arrivalAtLocal: stringOrNull,
       boardingAtLocal: stringOrNull,
+      departureTimeZone: stringOrNull,
+      arrivalTimeZone: stringOrNull,
       bookingReference: stringOrNull,
       ticketNumber: stringOrNull,
       passengers: stringArray,
@@ -183,6 +187,8 @@ function bookingExtractionSchema(): Record<string, unknown> {
       "toStation",
       "departureAtLocal",
       "arrivalAtLocal",
+      "departureTimeZone",
+      "arrivalTimeZone",
       "bookingReference",
       "passengers",
       "seats",
@@ -194,6 +200,8 @@ function bookingExtractionSchema(): Record<string, unknown> {
       toStation: stringOrNull,
       departureAtLocal: stringOrNull,
       arrivalAtLocal: stringOrNull,
+      departureTimeZone: stringOrNull,
+      arrivalTimeZone: stringOrNull,
       bookingReference: stringOrNull,
       passengers: stringArray,
       seats: stringArray,
@@ -208,6 +216,7 @@ function bookingExtractionSchema(): Record<string, unknown> {
       "city",
       "checkInAtLocal",
       "checkOutAtLocal",
+      "timeZone",
       "bookingReference",
       "guests",
       "phone",
@@ -219,6 +228,7 @@ function bookingExtractionSchema(): Record<string, unknown> {
       city: stringOrNull,
       checkInAtLocal: stringOrNull,
       checkOutAtLocal: stringOrNull,
+      timeZone: stringOrNull,
       bookingReference: stringOrNull,
       guests: stringArray,
       phone: stringOrNull,
@@ -228,7 +238,7 @@ function bookingExtractionSchema(): Record<string, unknown> {
   const generic = {
     type: ["object", "null"],
     additionalProperties: false,
-    required: ["providerName", "serviceIdentifier", "fromText", "toText", "startAtLocal", "endAtLocal", "people"],
+    required: ["providerName", "serviceIdentifier", "fromText", "toText", "startAtLocal", "endAtLocal", "startTimeZone", "endTimeZone", "people"],
     properties: {
       providerName: stringOrNull,
       serviceIdentifier: stringOrNull,
@@ -236,6 +246,8 @@ function bookingExtractionSchema(): Record<string, unknown> {
       toText: stringOrNull,
       startAtLocal: stringOrNull,
       endAtLocal: stringOrNull,
+      startTimeZone: stringOrNull,
+      endTimeZone: stringOrNull,
       people: stringArray,
     },
   };

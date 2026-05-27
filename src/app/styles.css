@@ -690,10 +690,17 @@ textarea:disabled {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+  align-items: start;
 }
 
 .booking-edit-title {
   grid-column: span 3;
+}
+
+.field-tz {
+  font-size: 12px;
+  color: #667085;
+  margin-top: 2px;
 }
 
 .booking-detail-text {

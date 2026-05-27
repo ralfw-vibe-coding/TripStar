@@ -53,7 +53,7 @@ import {
 } from "./api";
 import { tripColor } from "./trip-colors";
 import { ownTripsForUser, sharedTripsForUser } from "./trip-filters";
-import { formatTimePointLocal } from "../domain/time/booking-time";
+import { formatTimePointLocal, localDateTimeToInstant } from "../domain/time/booking-time";
 
 interface DocumentOriginalView {
   id: string;
@@ -871,6 +871,8 @@ function BookingCard({
 }) {
   const fullTrip = visibleTrips.find((trip) => trip.id === booking.tripId) ?? null;
   const allowedUsers = allowedParticipantUsers(fullTrip, users, currentUserId);
+  const startPoint = firstTimePoint(booking, ["departure", "start", "check_in"]);
+  const endPoint = firstTimePoint(booking, ["arrival", "end", "check_out"]);
   const [draft, setDraft] = useState(() => bookingDraftFromBooking(booking));
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -896,7 +898,7 @@ function BookingCard({
     setIsSavingDraft(true);
     setDraftError(null);
     try {
-      await onSaveBooking(booking, bookingInputFromDraft(draft));
+      await onSaveBooking(booking, bookingInputFromDraft(draft, booking));
     } catch (caught) {
       setDraftError(caught instanceof Error ? caught.message : "Booking could not be saved.");
     } finally {
@@ -996,10 +998,12 @@ function BookingCard({
                 value={draft.startAt}
                 onChange={(event) => setDraft({ ...draft, startAt: event.target.value })}
               />
+              {startPoint && <span className="field-tz">{formatTimeZoneLabel(startPoint.timeZone)}</span>}
             </label>
             <label className="field-label">
               End
               <input type="datetime-local" value={draft.endAt} onChange={(event) => setDraft({ ...draft, endAt: event.target.value })} />
+              {endPoint && <span className="field-tz">{formatTimeZoneLabel(endPoint.timeZone)}</span>}
             </label>
             <label className="field-label">
               From
@@ -1122,11 +1126,13 @@ interface BookingDraft {
 }
 
 function bookingDraftFromBooking(booking: CalendarBooking): BookingDraft {
+  const startPoint = firstTimePoint(booking, ["departure", "start", "check_in"]);
+  const endPoint = firstTimePoint(booking, ["arrival", "end", "check_out"]);
   return {
     type: booking.type,
     title: booking.title,
-    startAt: toDateTimeLocalValue(booking.startAt),
-    endAt: toDateTimeLocalValue(booking.endAt),
+    startAt: startPoint?.localDateTime ?? toDateTimeLocalValue(booking.startAt),
+    endAt: endPoint?.localDateTime ?? toDateTimeLocalValue(booking.endAt),
     fromText: booking.fromText ?? "",
     toText: booking.toText ?? "",
     operator: booking.operator ?? "",
@@ -1135,13 +1141,20 @@ function bookingDraftFromBooking(booking: CalendarBooking): BookingDraft {
   };
 }
 
-function bookingInputFromDraft(draft: BookingDraft): Partial<CalendarBooking> {
+function bookingInputFromDraft(draft: BookingDraft, booking: CalendarBooking): Partial<CalendarBooking> {
+  const startPoint = firstTimePoint(booking, ["departure", "start", "check_in"]);
+  const endPoint = firstTimePoint(booking, ["arrival", "end", "check_out"]);
+  const newStartPoint = resolveUpdatedTimePoint(draft.startAt, startPoint);
+  const newEndPoint = resolveUpdatedTimePoint(draft.endAt, endPoint);
+  const timePoints = booking.timePoints
+    .map((p) => (p === startPoint ? newStartPoint : p === endPoint ? newEndPoint : p))
+    .filter((p): p is CalendarBooking["timePoints"][0] => p !== null);
   return {
     type: draft.type,
     title: draft.title.trim() || "Untitled booking",
-    startAt: fromDateTimeLocalValue(draft.startAt),
-    endAt: fromDateTimeLocalValue(draft.endAt),
-    timePoints: [],
+    startAt: resolveInstant(draft.startAt, startPoint),
+    endAt: resolveInstant(draft.endAt, endPoint),
+    timePoints,
     fromText: nullableText(draft.fromText),
     toText: nullableText(draft.toText),
     operator: nullableText(draft.operator),
@@ -1150,8 +1163,31 @@ function bookingInputFromDraft(draft: BookingDraft): Partial<CalendarBooking> {
   };
 }
 
+function resolveInstant(draftValue: string, timePoint: CalendarBooking["timePoints"][0] | null): string | null {
+  if (!draftValue) return null;
+  if (timePoint) {
+    if (draftValue === timePoint.localDateTime) return timePoint.instant;
+    try { return localDateTimeToInstant(draftValue, timePoint.timeZone); } catch { /* fall through */ }
+  }
+  return fromDateTimeLocalValue(draftValue);
+}
+
+function resolveUpdatedTimePoint(
+  draftValue: string,
+  timePoint: CalendarBooking["timePoints"][0] | null,
+): CalendarBooking["timePoints"][0] | null {
+  if (!timePoint) return null;
+  if (!draftValue || draftValue === timePoint.localDateTime) return timePoint;
+  try {
+    const instant = localDateTimeToInstant(draftValue, timePoint.timeZone);
+    return { ...timePoint, localDateTime: draftValue, instant };
+  } catch {
+    return null;
+  }
+}
+
 function isBookingDraftDirty(booking: CalendarBooking, draft: BookingDraft): boolean {
-  const input = bookingInputFromDraft(draft);
+  const input = bookingInputFromDraft(draft, booking);
   return (
     input.type !== booking.type ||
     input.title !== booking.title ||
@@ -1163,6 +1199,24 @@ function isBookingDraftDirty(booking: CalendarBooking, draft: BookingDraft): boo
     input.serviceIdentifier !== booking.serviceIdentifier ||
     input.details !== booking.details
   );
+}
+
+function formatTimeZoneLabel(timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" }).formatToParts(new Date());
+    const offset = parts.find((p) => p.type === "timeZoneName")?.value ?? "";
+    return `${timeZone} - ${offset.replace("GMT", "UTC")}`;
+  } catch {
+    return timeZone;
+  }
+}
+
+function firstTimePoint(booking: CalendarBooking, labels: string[]): CalendarBooking["timePoints"][0] | null {
+  for (const label of labels) {
+    const point = booking.timePoints.find((p) => p.label === label);
+    if (point) return point;
+  }
+  return null;
 }
 
 function toDateTimeLocalValue(value: string | null): string {
@@ -1808,13 +1862,16 @@ function formatBookingTime(booking: CalendarBooking): string {
 }
 
 function formatBookingRange(booking: CalendarBooking): string {
-  const departure = timePointFor(booking, "departure") ?? timePointFor(booking, "start") ?? booking.timePoints[0];
-  const arrival = timePointFor(booking, "arrival") ?? timePointFor(booking, "end") ?? booking.timePoints[1];
-  if (departure && arrival) {
+  const departure = timePointFor(booking, "departure") ?? timePointFor(booking, "start") ?? timePointFor(booking, "check_in") ?? null;
+  const arrival = timePointFor(booking, "arrival") ?? timePointFor(booking, "end") ?? timePointFor(booking, "check_out") ?? null;
+  if (departure && arrival && departure !== arrival) {
     return `${formatTimePointLocal(departure)}-${timeOnlyFromLocalDateTime(arrival.localDateTime)}`;
   }
   if (departure) {
     return formatTimePointLocal(departure);
+  }
+  if (arrival) {
+    return formatTimePointLocal(arrival);
   }
   if (!booking.startAt) return "No date";
   const start = new Date(booking.startAt);

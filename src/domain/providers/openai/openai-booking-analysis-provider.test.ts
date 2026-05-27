@@ -40,6 +40,8 @@ describe("OpenAIBookingAnalysisProvider", () => {
                   departureAtLocal: "03.07. 09:30",
                   arrivalAtLocal: null,
                   boardingAtLocal: null,
+                  departureTimeZone: null,
+                  arrivalTimeZone: null,
                   bookingReference: null,
                   ticketNumber: null,
                   passengers: [],
