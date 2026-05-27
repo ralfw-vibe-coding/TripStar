@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalStateProvider } from "../domain/providers/local/local-state-provider";
 import { setStateProviderForTests } from "../domain/provider-factory";
 import { handleApiRequest } from "./api-router";
@@ -44,6 +44,8 @@ const booking: Booking = {
 
 describe("API router", () => {
   beforeEach(() => {
+    vi.stubEnv("TRIPSTAR_AUTH_MODE", "local");
+    vi.stubEnv("TRIPSTAR_FILE_STORAGE", "local");
     setStateProviderForTests(
       new LocalStateProvider({
         now: () => new Date(now),

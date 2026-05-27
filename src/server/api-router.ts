@@ -5,8 +5,11 @@ import { createTrip, listTrips, updateTrip } from "../domain/rpus/trips";
 import { getStateProvider } from "../domain/provider-factory";
 import { LocalDocumentStorageProvider } from "../domain/providers/local/local-document-storage-provider";
 import { OpenAIBookingAnalysisProvider } from "../domain/providers/openai/openai-booking-analysis-provider";
+import { R2DocumentStorageProvider } from "../domain/providers/remote/r2-document-storage-provider";
+import type { DocumentStorageProvider } from "../domain/providers/document-storage-provider";
 import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../domain/providers/state-provider";
 import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
+import { sendOtpEmail } from "./email";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
 import { existsSync } from "node:fs";
@@ -24,7 +27,15 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (segments[0] === "auth") {
       if (request.method === "POST" && segments.length === 2 && segments[1] === "request-otp") {
         const body = await readJson<{ email: string }>(request);
-        return jsonResponse(await requestLoginOtp(provider, body.email));
+        const result = await requestLoginOtp(provider, body.email);
+        if (process.env.TRIPSTAR_AUTH_MODE === "email") {
+          if (!result.devOtp) {
+            throw new Error("OTP generation failed.");
+          }
+          await sendOtpEmail({ to: result.email, otp: result.devOtp, expiresAt: result.expiresAt });
+          return jsonResponse({ email: result.email, expiresAt: result.expiresAt });
+        }
+        return jsonResponse(result);
       }
 
       if (request.method === "POST" && segments.length === 2 && segments[1] === "verify-otp") {
@@ -201,9 +212,25 @@ function createBookingAnalysisProvider(): OpenAIBookingAnalysisProvider {
   return new OpenAIBookingAnalysisProvider(apiKey, process.env.OPENAI_MODEL ?? "gpt-5.4-mini");
 }
 
-function createDocumentStorageProvider(): LocalDocumentStorageProvider {
+function createDocumentStorageProvider(): DocumentStorageProvider {
+  if (process.env.TRIPSTAR_FILE_STORAGE === "r2") {
+    return new R2DocumentStorageProvider({
+      bucket: requiredEnv("R2_BUCKET"),
+      accountId: requiredEnv("R2_ACCOUNT_ID"),
+      accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
+      secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
+    });
+  }
   const localPersistenceDir = process.env.LOCAL_PERSISTENCE_DIR ?? "./data";
   return new LocalDocumentStorageProvider(join(resolveLocalPersistenceDir(localPersistenceDir), "storage"));
+}
+
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required.`);
+  }
+  return value;
 }
 
 function resolveLocalPersistenceDir(localPersistenceDir: string): string {

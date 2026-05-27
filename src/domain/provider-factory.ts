@@ -20,7 +20,9 @@ export function getStateProvider(): TripStarStateProvider {
     if (!connectionString) {
       throw new Error("DATABASE_URL is required for remote state provider.");
     }
-    const provider = new PostgresStateProvider(connectionString);
+    const provider = new PostgresStateProvider(connectionString, {
+      initialTripNumber: parseInitialTripNumber(process.env.INITIAL_TRIP_NUMBER),
+    });
     globalThis.__tripstarStateProvider = provider;
     return provider;
   }
