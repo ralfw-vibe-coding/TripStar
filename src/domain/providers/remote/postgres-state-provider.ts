@@ -66,6 +66,10 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return this.notImplemented();
   }
 
+  async deleteBooking(_id: Id): Promise<Booking> {
+    return this.notImplemented();
+  }
+
   async listDocuments(): Promise<DocumentRecord[]> {
     return this.notImplemented();
   }
@@ -75,6 +79,10 @@ export class PostgresStateProvider implements TripStarStateProvider {
   }
 
   async assignDocumentToTrip(_documentId: Id, _tripId: Id | null): Promise<DocumentRecord> {
+    return this.notImplemented();
+  }
+
+  async deleteDocument(_id: Id): Promise<DocumentRecord> {
     return this.notImplemented();
   }
 

@@ -1,4 +1,4 @@
-import { assignBookingToTrip, updateBooking } from "../domain/rpus/bookings";
+import { assignBookingToTrip, deleteBooking, updateBooking } from "../domain/rpus/bookings";
 import { getCurrentUser, requestLoginOtp, verifyLoginOtp } from "../domain/rpus/auth";
 import { getCalendar } from "../domain/rpus/calendar";
 import { createTrip, listTrips, updateTrip } from "../domain/rpus/trips";
@@ -77,6 +77,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     }
 
     if (segments[0] === "bookings" && segments.length >= 2) {
+      if (request.method === "DELETE" && segments.length === 2) {
+        return jsonResponse(await deleteBooking(provider, segments[1]));
+      }
+
       if (request.method === "PATCH" && segments.length === 2) {
         return jsonResponse(await updateBooking(provider, segments[1], await readJson<UpdateBookingInput>(request)));
       }

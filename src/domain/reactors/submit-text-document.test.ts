@@ -83,6 +83,7 @@ describe("submitTextDocument", () => {
       tripId: trip.id,
       sourceDocumentId: result.document?.id,
       participantUserIds: ["user_1"],
+      status: "reviewed",
       title: "Flight to Berlin",
     });
   });

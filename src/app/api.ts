@@ -1,5 +1,5 @@
 import type { ActivityLogEntry, AuthSession, Booking, CalendarView, Trip, User } from "../domain/model";
-import type { CreateTripInput } from "../domain/providers/state-provider";
+import type { CreateTripInput, UpdateTripInput } from "../domain/providers/state-provider";
 
 const authTokenStorageKey = "tripstar.authToken";
 
@@ -49,6 +49,13 @@ export function createTrip(input: CreateTripInput): Promise<Trip> {
   });
 }
 
+export function updateTrip(tripId: string, input: UpdateTripInput): Promise<Trip> {
+  return requestJson<Trip>(`/api/trips/${tripId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export function assignBookingTrip(bookingId: string, tripId: string | null): Promise<Booking> {
   return requestJson<Booking>(`/api/bookings/${bookingId}/trip`, {
     method: "PATCH",
@@ -60,6 +67,12 @@ export function updateBooking(bookingId: string, input: Partial<Booking>): Promi
   return requestJson<Booking>(`/api/bookings/${bookingId}`, {
     method: "PATCH",
     body: JSON.stringify(input),
+  });
+}
+
+export function deleteBooking(bookingId: string): Promise<{ booking: Booking; deletedDocumentId: string | null }> {
+  return requestJson<{ booking: Booking; deletedDocumentId: string | null }>(`/api/bookings/${bookingId}`, {
+    method: "DELETE",
   });
 }
 

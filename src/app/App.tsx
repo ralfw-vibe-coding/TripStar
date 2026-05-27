@@ -7,8 +7,10 @@ import {
   LoaderCircle,
   LogOut,
   ExternalLink,
+  Pencil,
   Plane,
   Plus,
+  Trash2,
   UserCircle,
   TrainFront,
   UserRoundCheck,
@@ -31,6 +33,7 @@ import {
   assignBookingTrip,
   clearAuthToken,
   createTrip,
+  deleteBooking,
   fetchActivityLog,
   fetchCalendar,
   fetchCurrentUser,
@@ -44,6 +47,7 @@ import {
   submitTextDocument,
   updateBooking,
   updateProfile,
+  updateTrip,
   verifyOtp,
 } from "./api";
 import { tripColor } from "./trip-colors";
@@ -65,9 +69,11 @@ export function App() {
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [documentViewer, setDocumentViewer] = useState<DocumentOriginalView | null>(null);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
+  const [pendingDeleteBookingId, setPendingDeleteBookingId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<"calendar" | "reports">("calendar");
   const [error, setError] = useState<string | null>(null);
   const [isTripDialogOpen, setIsTripDialogOpen] = useState(false);
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
@@ -90,6 +96,19 @@ export function App() {
     void reloadWorkspace()
       .catch((caught: Error) => setError(caught.message));
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!pendingDeleteBookingId) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!(event.target as HTMLElement).closest(".delete-booking-button")) {
+        setPendingDeleteBookingId(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [pendingDeleteBookingId]);
 
   const ownTrips = useMemo(
     () => (currentUser ? ownTripsForUser(view?.trips ?? [], currentUser.id) : []),
@@ -129,6 +148,42 @@ export function App() {
     }
   }
 
+  async function handleTripUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!view || !editingTrip) return;
+
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const sharedWithUserIds = data.getAll("sharedWithUserIds").map(String);
+
+    setIsCreatingTrip(true);
+    setError(null);
+    try {
+      const trip = await updateTrip(editingTrip.id, {
+        title: String(data.get("title")),
+        startDate: String(data.get("startDate")),
+        endDate: String(data.get("endDate")),
+        places: String(data.get("places")),
+        sharedWithUserIds,
+      });
+      setView({
+        ...view,
+        trips: view.trips.map((candidate) => (candidate.id === trip.id ? trip : candidate)),
+        bookings: view.bookings.map((booking) =>
+          booking.tripId === trip.id
+            ? { ...booking, trip: { id: trip.id, tripNumber: trip.tripNumber, title: trip.title, color: trip.color } }
+            : booking,
+        ),
+      });
+      setEditingTrip(null);
+      setIsTripDialogOpen(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Trip could not be saved.");
+    } finally {
+      setIsCreatingTrip(false);
+    }
+  }
+
   async function handleAssignBooking(booking: CalendarBooking, tripId: string | null) {
     if (!view) return;
     const trip = view.trips.find((candidate) => candidate.id === tripId) ?? null;
@@ -156,7 +211,6 @@ export function App() {
                 ? {
                     id: trip.id,
                     tripNumber: trip.tripNumber,
-                    shortCode: trip.shortCode,
                     title: trip.title,
                     color: trip.color,
                   }
@@ -189,6 +243,26 @@ export function App() {
     } catch (caught) {
       setView(previousView);
       setError(caught instanceof Error ? caught.message : "Participants could not be updated.");
+    }
+  }
+
+  async function handleDeleteBooking(booking: CalendarBooking) {
+    if (!view) return;
+    if (pendingDeleteBookingId !== booking.id) {
+      setPendingDeleteBookingId(booking.id);
+      return;
+    }
+
+    const previousView = view;
+    setPendingDeleteBookingId(null);
+    setExpandedBookingId((current) => (current === booking.id ? null : current));
+    setView({ ...view, bookings: view.bookings.filter((candidate) => candidate.id !== booking.id) });
+    try {
+      await deleteBooking(booking.id);
+      await reloadCalendar();
+    } catch (caught) {
+      setView(previousView);
+      setError(caught instanceof Error ? caught.message : "Booking could not be deleted.");
     }
   }
 
@@ -253,7 +327,7 @@ export function App() {
           {isProfileMenuOpen && (
             <div className="profile-popover">
               <div className="profile-summary">
-                <strong>{currentUser.displayName}</strong>
+                <strong>{currentUser.shortCode}</strong>
                 <span>{currentUser.email}</span>
               </div>
               <button
@@ -292,8 +366,22 @@ export function App() {
               <Plus size={18} />
             </button>
           </header>
-          <TripList title="Mine" trips={ownTrips} />
-          <TripList title="Shared" trips={sharedTrips} />
+          <TripList
+            title="Mine"
+            trips={ownTrips}
+            onEdit={(trip) => {
+              setEditingTrip(trip);
+              setIsTripDialogOpen(true);
+            }}
+          />
+          <TripList
+            title="Shared"
+            trips={sharedTrips}
+            onEdit={(trip) => {
+              setEditingTrip(trip);
+              setIsTripDialogOpen(true);
+            }}
+          />
         </section>
       </aside>
 
@@ -308,6 +396,9 @@ export function App() {
             onToggleBooking={(id) => setExpandedBookingId((current) => (current === id ? null : id))}
             onAssign={handleAssignBooking}
             onUpdateParticipants={handleUpdateBookingParticipants}
+            onDeleteBooking={handleDeleteBooking}
+            pendingDeleteBookingId={pendingDeleteBookingId}
+            onClearPendingDelete={() => setPendingDeleteBookingId(null)}
             onAddDocument={() => setIsDocumentDialogOpen(true)}
             onOpenDocument={handleOpenDocument}
             activityLog={activityLog}
@@ -321,8 +412,12 @@ export function App() {
         <TripDialog
           users={view.users}
           currentUserId={currentUser.id}
-          onClose={() => setIsTripDialogOpen(false)}
-          onSubmit={handleTripCreate}
+          trip={editingTrip}
+          onClose={() => {
+            setEditingTrip(null);
+            setIsTripDialogOpen(false);
+          }}
+          onSubmit={editingTrip ? handleTripUpdate : handleTripCreate}
           isSubmitting={isCreatingTrip}
         />
       )}
@@ -447,7 +542,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-function TripList({ title, trips }: { title: string; trips: Trip[] }) {
+function TripList({ title, trips, onEdit }: { title: string; trips: Trip[]; onEdit: (trip: Trip) => void }) {
   return (
     <section className="trip-group">
       <h3>{title}</h3>
@@ -465,6 +560,9 @@ function TripList({ title, trips }: { title: string; trips: Trip[] }) {
               <span className="trip-row-dates">
                 {shortDate(trip.startDate)}-{shortDate(trip.endDate)}
               </span>
+              <button className="trip-edit-button" type="button" aria-label={`Edit ${trip.title}`} onClick={() => onEdit(trip)}>
+                <Pencil size={14} />
+              </button>
             </article>
           ))
         )}
@@ -534,6 +632,9 @@ function CalendarPanel({
   onToggleBooking,
   onAssign,
   onUpdateParticipants,
+  onDeleteBooking,
+  pendingDeleteBookingId,
+  onClearPendingDelete,
   onAddDocument,
   onOpenDocument,
   activityLog,
@@ -544,23 +645,36 @@ function CalendarPanel({
   onToggleBooking: (id: string) => void;
   onAssign: (booking: CalendarBooking, tripId: string | null) => void;
   onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
+  onDeleteBooking: (booking: CalendarBooking) => void;
+  pendingDeleteBookingId: string | null;
+  onClearPendingDelete: () => void;
   onAddDocument: () => void;
   onOpenDocument: (documentId: string) => void;
   activityLog: ActivityLogEntry[];
 }) {
   const [tripFilter, setTripFilter] = useState("all");
+  const [userFilter, setUserFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<"today" | "10" | "30" | "all">("all");
 
   if (!view) {
     return <div className="loading">Loading calendar...</div>;
   }
 
-  const filteredBookings = filterCalendarBookings(view.bookings, tripFilter, dateFilter);
   const visibleTrips = visibleTripsForUser(view.trips, currentUser.id);
+  const filterUsers = calendarFilterUsers(view.users, visibleTrips, currentUser.id);
+  const filteredBookings = filterCalendarBookings(view.bookings, tripFilter, userFilter, dateFilter);
   const bookingGroups = groupBookingsByDay(filteredBookings);
 
   return (
-    <section className="calendar-panel" aria-label="Bookings">
+    <section
+      className="calendar-panel"
+      aria-label="Bookings"
+      onClickCapture={(event) => {
+        if (pendingDeleteBookingId && !(event.target as HTMLElement).closest(".delete-booking-button")) {
+          onClearPendingDelete();
+        }
+      }}
+    >
       <header className="section-header">
         <div>
           <h2>Calendar</h2>
@@ -579,6 +693,17 @@ function CalendarPanel({
             {visibleTrips.map((trip) => (
               <option key={trip.id} value={trip.id}>
                 {trip.title} #{trip.tripNumber}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          User
+          <select value={userFilter} onChange={(event) => setUserFilter(event.target.value)}>
+            <option value="all">All related users</option>
+            {filterUsers.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.shortCode}
               </option>
             ))}
           </select>
@@ -610,6 +735,9 @@ function CalendarPanel({
                     onToggleBooking={onToggleBooking}
                     onAssign={onAssign}
                     onUpdateParticipants={onUpdateParticipants}
+                    onDeleteBooking={onDeleteBooking}
+                    isDeletePending={pendingDeleteBookingId === booking.id}
+                    onClearPendingDelete={onClearPendingDelete}
                     onOpenDocument={onOpenDocument}
                     visibleTrips={visibleTrips}
                     users={view.users}
@@ -648,6 +776,9 @@ function BookingCard({
   onToggleBooking,
   onAssign,
   onUpdateParticipants,
+  onDeleteBooking,
+  isDeletePending,
+  onClearPendingDelete,
   onOpenDocument,
   visibleTrips,
   users,
@@ -658,6 +789,9 @@ function BookingCard({
   onToggleBooking: (id: string) => void;
   onAssign: (booking: CalendarBooking, tripId: string | null) => void;
   onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
+  onDeleteBooking: (booking: CalendarBooking) => void;
+  isDeletePending: boolean;
+  onClearPendingDelete: () => void;
   onOpenDocument: (documentId: string) => void;
   visibleTrips: Trip[];
   users: User[];
@@ -670,7 +804,22 @@ function BookingCard({
       className={`booking-card ${expandedBookingId === booking.id ? "expanded" : ""}`}
       style={{ borderLeftColor: booking.trip ? tripColorForBooking(booking.trip) : "#cfd8df" }}
     >
-      <button className="booking-summary" onClick={() => onToggleBooking(booking.id)}>
+      <div
+        role="button"
+        tabIndex={0}
+        className="booking-summary"
+        onClick={() => {
+          onClearPendingDelete();
+          onToggleBooking(booking.id);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onClearPendingDelete();
+            onToggleBooking(booking.id);
+          }
+        }}
+      >
         <span className="booking-icon">{iconForType(booking.type)}</span>
         <span className="booking-main">
           <strong>{bookingHeaderTitle(booking)}</strong>
@@ -691,11 +840,30 @@ function BookingCard({
               <ExternalLink size={13} />
             </a>
           )}
-          {booking.trip && <span className="booking-trip">{booking.trip.shortCode}</span>}
-          <span className="status-pill">{booking.status === "inbox" ? "Inbox" : booking.status}</span>
+          {booking.trip && <span className="booking-trip">{booking.trip.title} #{booking.trip.tripNumber}</span>}
+          {booking.status === "inbox" && <span className="status-pill">Inbox</span>}
           <ParticipantChips users={usersForIds(users, booking.participantUserIds)} />
+          <span
+            role="button"
+            tabIndex={0}
+            className={`delete-booking-button ${isDeletePending ? "confirm" : ""}`}
+            aria-label={isDeletePending ? `Confirm delete ${booking.title}` : `Delete ${booking.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteBooking(booking);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onDeleteBooking(booking);
+              }
+            }}
+          >
+            {isDeletePending ? "?" : <Trash2 size={14} />}
+          </span>
         </span>
-      </button>
+      </div>
 
       {expandedBookingId === booking.id && (
         <div className="booking-details">
@@ -808,12 +976,14 @@ function ParticipantPicker({
 function filterCalendarBookings(
   bookings: CalendarBooking[],
   tripFilter: string,
+  userFilter: string,
   dateFilter: "today" | "10" | "30" | "all",
 ): CalendarBooking[] {
   const from = startDateForCalendarFilter(dateFilter);
   return bookings.filter((booking) => {
     if (tripFilter === "inbox" && booking.tripId !== null) return false;
     if (tripFilter !== "all" && tripFilter !== "inbox" && booking.tripId !== tripFilter) return false;
+    if (userFilter !== "all" && !booking.participantUserIds.includes(userFilter)) return false;
     if (from && booking.startAt && new Date(booking.startAt) < from) return false;
     return true;
   });
@@ -873,6 +1043,17 @@ function pad2(value: number): string {
 
 function visibleTripsForUser(trips: Trip[], userId: string): Trip[] {
   return trips.filter((trip) => trip.ownerUserId === userId || trip.sharedWithUserIds.includes(userId));
+}
+
+function calendarFilterUsers(users: User[], trips: Trip[], currentUserId: string): User[] {
+  const userIds = new Set<string>([currentUserId]);
+  for (const trip of trips) {
+    userIds.add(trip.ownerUserId);
+    for (const sharedUserId of trip.sharedWithUserIds) {
+      userIds.add(sharedUserId);
+    }
+  }
+  return users.filter((user) => userIds.has(user.id));
 }
 
 function allowedParticipantUsers(
@@ -1234,23 +1415,26 @@ async function pdfFileToPayload(file: File): Promise<{ name: string; size: numbe
 function TripDialog({
   users,
   currentUserId,
+  trip,
   onClose,
   onSubmit,
   isSubmitting,
 }: {
   users: User[];
   currentUserId: string;
+  trip: Trip | null;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isSubmitting: boolean;
 }) {
+  const isEditing = trip !== null;
   return (
     <div className="modal-backdrop" role="presentation">
       <form className="trip-dialog" onSubmit={onSubmit}>
         <header className="dialog-header">
           <div>
-            <h2>Create trip</h2>
-            <p>Details can be changed later.</p>
+            <h2>{isEditing ? "Edit trip" : "Create trip"}</h2>
+            <p>{isEditing ? `#${trip.tripNumber}` : "Details can be changed later."}</p>
           </div>
           <button className="icon-command" type="button" aria-label="Close" onClick={onClose}>
             <X size={18} />
@@ -1259,23 +1443,23 @@ function TripDialog({
 
         <label className="field-label">
           Title
-          <input name="title" placeholder="Trip number if empty" />
+          <input name="title" placeholder="Trip number if empty" defaultValue={trip?.title ?? ""} />
         </label>
 
         <div className="date-grid">
           <label className="field-label">
             Starting date *
-            <input name="startDate" type="date" required onChange={fillEndDateIfEmpty} />
+            <input name="startDate" type="date" required defaultValue={trip?.startDate ?? ""} onChange={fillEndDateIfEmpty} />
           </label>
           <label className="field-label">
             End date *
-            <input name="endDate" type="date" required />
+            <input name="endDate" type="date" required defaultValue={trip?.endDate ?? ""} />
           </label>
         </div>
 
         <label className="field-label">
           Places *
-          <input name="places" placeholder="San Francisco, Palo Alto" required />
+          <input name="places" placeholder="San Francisco, Palo Alto" required defaultValue={trip?.places ?? ""} />
         </label>
 
         <fieldset className="user-picker">
@@ -1284,9 +1468,13 @@ function TripDialog({
             .filter((user) => user.id !== currentUserId)
             .map((user) => (
               <label key={user.id}>
-                <input type="checkbox" name="sharedWithUserIds" value={user.id} />
+                <input
+                  type="checkbox"
+                  name="sharedWithUserIds"
+                  value={user.id}
+                  defaultChecked={trip?.sharedWithUserIds.includes(user.id) ?? false}
+                />
                 <span>{user.shortCode}</span>
-                {user.displayName}
               </label>
             ))}
         </fieldset>
@@ -1298,7 +1486,7 @@ function TripDialog({
           </button>
           <button type="submit" className="primary-button" disabled={isSubmitting}>
             <Check size={16} />
-            {isSubmitting ? "Creating" : "Create"}
+            {isSubmitting ? "Saving" : isEditing ? "Save" : "Create"}
           </button>
         </footer>
       </form>

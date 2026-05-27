@@ -7,7 +7,6 @@ const now = "2026-05-26T09:00:00.000Z";
 const trip: Trip = {
   id: "trip_200",
   tripNumber: "200",
-  shortCode: "TST",
   title: "Test Trip",
   ownerUserId: "user_ralf",
   startDate: "2026-07-01",
@@ -29,7 +28,6 @@ describe("trip RPUs", () => {
       createTrip(provider, {
         title: "Bad dates",
         ownerUserId: "user_ralf",
-        shortCode: "BAD",
         startDate: "2026-08-10",
         endDate: "2026-08-09",
         places: "Nowhere",

@@ -205,7 +205,6 @@ export class LocalStateProvider implements TripStarStateProvider {
     const trip: Trip = {
       id: `trip_${tripNumber}`,
       tripNumber,
-      shortCode: this.normalizeShortCode(input.shortCode ?? title),
       title,
       ownerUserId: input.ownerUserId,
       startDate: input.startDate,
@@ -319,6 +318,22 @@ export class LocalStateProvider implements TripStarStateProvider {
     return clone(booking);
   }
 
+  async deleteBooking(id: Id): Promise<Booking> {
+    const booking = this.requireBooking(id);
+    const timestamp = isoDate(this.now());
+    booking.deletedAt = timestamp;
+    booking.updatedAt = timestamp;
+    await this.appendActivity({
+      level: "info",
+      scope: "booking",
+      message: `Deleted booking ${booking.title}`,
+      documentName: null,
+      details: { bookingId: id, documentId: booking.sourceDocumentId },
+    });
+    this.persist();
+    return clone(booking);
+  }
+
   async listDocuments(): Promise<DocumentRecord[]> {
     return clone(this.documents.filter((document) => document.deletedAt === null));
   }
@@ -371,6 +386,22 @@ export class LocalStateProvider implements TripStarStateProvider {
     return clone(document);
   }
 
+  async deleteDocument(id: Id): Promise<DocumentRecord> {
+    const document = this.requireDocument(id);
+    const timestamp = isoDate(this.now());
+    document.deletedAt = timestamp;
+    document.updatedAt = timestamp;
+    await this.appendActivity({
+      level: "info",
+      scope: "document",
+      message: "Deleted document after last booking was removed",
+      documentName: document.originalFileName,
+      details: { documentId: id },
+    });
+    this.persist();
+    return clone(document);
+  }
+
   async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp">): Promise<ActivityLogEntry> {
     const activity: ActivityLogEntry = {
       ...entry,
@@ -399,7 +430,6 @@ export class LocalStateProvider implements TripStarStateProvider {
             ? {
                 id: trip.id,
                 tripNumber: trip.tripNumber,
-                shortCode: trip.shortCode,
                 title: trip.title,
                 color: trip.color,
               }
@@ -445,11 +475,6 @@ export class LocalStateProvider implements TripStarStateProvider {
       .filter((number) => Number.isFinite(number));
     const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : this.initialTripNumber;
     return String(nextNumber).padStart(3, "0");
-  }
-
-  private normalizeShortCode(shortCode: string): string {
-    const letters = shortCode.replace(/[^a-zA-Z0-9]/g, "").slice(0, 5).toUpperCase();
-    return letters || "TRP";
   }
 
   private startOfDay(date: Date): Date {
@@ -537,7 +562,6 @@ export class LocalStateProvider implements TripStarStateProvider {
       id: `user_${randomUUID()}`,
       email,
       shortCode: userShortCode(email),
-      displayName: email.split("@")[0] || email,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -548,6 +572,7 @@ export class LocalStateProvider implements TripStarStateProvider {
   private createSessionToken(): string {
     return randomBytes(32).toString("base64url");
   }
+
 }
 
 function normalizeEmail(email: string): string {

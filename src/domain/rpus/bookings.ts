@@ -19,3 +19,29 @@ export async function assignBookingToTrip(
 ): Promise<Booking> {
   return provider.assignBookingToTrip(bookingId, tripId);
 }
+
+export interface DeleteBookingResult {
+  booking: Booking;
+  deletedDocumentId: Id | null;
+}
+
+export async function deleteBooking(provider: TripStarStateProvider, bookingId: Id): Promise<DeleteBookingResult> {
+  const booking = (await provider.listBookings()).find((candidate) => candidate.id === bookingId);
+  if (!booking) {
+    throw new Error(`Booking not found: ${bookingId}`);
+  }
+
+  const deletedBooking = await provider.deleteBooking(bookingId);
+  let deletedDocumentId: Id | null = null;
+  if (booking.sourceDocumentId) {
+    const remainingDocumentBookings = (await provider.listBookings()).filter(
+      (candidate) => candidate.sourceDocumentId === booking.sourceDocumentId,
+    );
+    if (remainingDocumentBookings.length === 0) {
+      await provider.deleteDocument(booking.sourceDocumentId);
+      deletedDocumentId = booking.sourceDocumentId;
+    }
+  }
+
+  return { booking: deletedBooking, deletedDocumentId };
+}

@@ -17,7 +17,6 @@ export interface User {
   id: Id;
   email: string;
   shortCode: string;
-  displayName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,7 +49,6 @@ export interface DailyAllowance {
 export interface Trip {
   id: Id;
   tripNumber: string;
-  shortCode: string;
   title: string;
   ownerUserId: Id;
   startDate: string;
@@ -116,7 +114,7 @@ export interface ActivityLogEntry {
 }
 
 export interface CalendarBooking extends Booking {
-  trip: Pick<Trip, "id" | "tripNumber" | "shortCode" | "title" | "color"> | null;
+  trip: Pick<Trip, "id" | "tripNumber" | "title" | "color"> | null;
 }
 
 export interface CalendarView {

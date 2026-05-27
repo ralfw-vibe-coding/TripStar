@@ -75,7 +75,7 @@ export async function submitTextDocument(
       tripId: input.tripId,
       sourceDocumentId: document.id,
       participantUserIds: [input.currentUserId],
-      status: "inbox",
+      status: "reviewed",
     })),
   );
 

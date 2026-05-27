@@ -5,7 +5,6 @@ import { ownTripsForUser, sharedTripsForUser } from "./trip-filters";
 const baseTrip: Trip = {
   id: "trip_1",
   tripNumber: "001",
-  shortCode: "ONE",
   title: "One",
   ownerUserId: "user_a",
   startDate: "2026-01-01",

@@ -13,7 +13,6 @@ function testTrip(overrides: Partial<Trip> = {}): Trip {
   return {
     id: "trip_sfo",
     tripNumber: "200",
-    shortCode: "SFO",
     title: "San Francisco Sprint",
     ownerUserId: "user_ralf",
     startDate: "2026-06-03",
@@ -65,7 +64,6 @@ describe("LocalStateProvider", () => {
     const trip = await provider.createTrip({
       title: "Berlin Workshop",
       ownerUserId: "user_ralf",
-      shortCode: "BER",
       startDate: "2026-07-01",
       endDate: "2026-07-03",
       places: "Berlin",
@@ -74,7 +72,6 @@ describe("LocalStateProvider", () => {
 
     expect(trip).toMatchObject({
       tripNumber: "200",
-      shortCode: "BER",
       places: "Berlin",
       sharedWithUserIds: ["user_mara"],
       color: "",
@@ -96,7 +93,6 @@ describe("LocalStateProvider", () => {
 
     expect(trip.tripNumber).toBe("200");
     expect(trip.title).toBe("#200");
-    expect(trip.shortCode).toBe("200");
   });
 
   it("returns cloned state so callers cannot mutate provider internals", async () => {
@@ -116,7 +112,6 @@ describe("LocalStateProvider", () => {
         {
           id: "late",
           tripNumber: "202",
-          shortCode: "LATE",
           title: "Late",
           ownerUserId: "user_ralf",
           startDate: "2026-12-01",
@@ -132,7 +127,6 @@ describe("LocalStateProvider", () => {
         {
           id: "early",
           tripNumber: "201",
-          shortCode: "EARLY",
           title: "Early",
           ownerUserId: "user_ralf",
           startDate: "2026-01-01",
@@ -159,7 +153,6 @@ describe("LocalStateProvider", () => {
         {
           id: "old_1",
           tripNumber: "201",
-          shortCode: "OLD",
           title: "Old duplicate",
           ownerUserId: "user_ralf",
           startDate: "2026-07-01",
@@ -175,7 +168,6 @@ describe("LocalStateProvider", () => {
         {
           id: "old_2",
           tripNumber: "201",
-          shortCode: "NEW",
           title: "Kept duplicate",
           ownerUserId: "user_ralf",
           startDate: "2026-07-03",
@@ -278,8 +270,8 @@ describe("LocalStateProvider", () => {
     expect(verified.user).toMatchObject({
       email: "ralf@example.com",
       shortCode: "RAL",
-      displayName: "ralf",
     });
+    expect(verified.user).not.toHaveProperty("displayName");
     expect(session?.user.email).toBe("ralf@example.com");
   });
 
@@ -401,6 +393,44 @@ describe("LocalStateProvider", () => {
       tripId: "trip_sfo",
     });
     await expect(provider.listDocuments()).resolves.toHaveLength(1);
+  });
+
+  it("soft-deletes bookings and documents", async () => {
+    const provider = new LocalStateProvider({
+      now: () => fixedNow,
+      bookings: [testBooking({ sourceDocumentId: "document_1" })],
+      documents: [
+        {
+          id: "document_1",
+          tripId: null,
+          storageKey: "local/document_1.pdf",
+          originalFileName: "receipt.pdf",
+          mimeType: "application/pdf",
+          sourceType: "upload",
+          sourceEmailIngestId: null,
+          extractedText: null,
+          isReceipt: false,
+          receiptAmount: null,
+          receiptCurrency: null,
+          receiptJson: null,
+          processingStatus: "ready",
+          createdAt: fixedIso,
+          updatedAt: fixedIso,
+          deletedAt: null,
+        },
+      ],
+    });
+
+    await expect(provider.deleteBooking("booking_hotel_1")).resolves.toMatchObject({ deletedAt: fixedIso });
+    await expect(provider.listBookings()).resolves.toEqual([]);
+    await expect(provider.deleteDocument("document_1")).resolves.toMatchObject({ deletedAt: fixedIso });
+    await expect(provider.listDocuments()).resolves.toEqual([]);
+    await expect(provider.listActivity()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ scope: "booking", message: "Deleted booking Hotel reservation" }),
+        expect.objectContaining({ scope: "document", message: "Deleted document after last booking was removed" }),
+      ]),
+    );
   });
 
   it("rejects missing bookings and documents", async () => {

@@ -20,16 +20,18 @@ export function getStateProvider(): TripStarStateProvider {
     if (!connectionString) {
       throw new Error("DATABASE_URL is required for remote state provider.");
     }
-    globalThis.__tripstarStateProvider = new PostgresStateProvider(connectionString);
-    return globalThis.__tripstarStateProvider;
+    const provider = new PostgresStateProvider(connectionString);
+    globalThis.__tripstarStateProvider = provider;
+    return provider;
   }
 
   const localPersistenceDir = process.env.LOCAL_PERSISTENCE_DIR ?? "./data";
-  globalThis.__tripstarStateProvider = new LocalStateProvider({
+  const provider = new LocalStateProvider({
     initialTripNumber: parseInitialTripNumber(process.env.INITIAL_TRIP_NUMBER),
     stateFilePath: join(resolveLocalPersistenceDir(localPersistenceDir), "state", "tripstar-state.json"),
   });
-  return globalThis.__tripstarStateProvider;
+  globalThis.__tripstarStateProvider = provider;
+  return provider;
 }
 
 export function setStateProviderForTests(provider: TripStarStateProvider | null): void {

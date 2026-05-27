@@ -75,7 +75,12 @@ describe("submitPdfDocuments", () => {
     expect(result.documents).toHaveLength(2);
     expect(result.documents[0]).toMatchObject({ tripId: trip.id, sourceType: "upload", mimeType: "application/pdf" });
     expect(result.bookings).toHaveLength(2);
-    expect(result.bookings[0]).toMatchObject({ tripId: trip.id, participantUserIds: ["user_1"], title: "Train to Hamburg" });
+    expect(result.bookings[0]).toMatchObject({
+      tripId: trip.id,
+      participantUserIds: ["user_1"],
+      status: "reviewed",
+      title: "Train to Hamburg",
+    });
   });
 
   it("stores PDFs even when no bookings are found", async () => {

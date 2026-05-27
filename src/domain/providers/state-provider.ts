@@ -3,7 +3,6 @@ import type { ActivityLogEntry, AuthSession, Booking, CalendarView, DocumentReco
 export interface CreateTripInput {
   title: string;
   ownerUserId: Id;
-  shortCode?: string;
   startDate: string;
   endDate: string;
   places: string;
@@ -13,7 +12,6 @@ export interface CreateTripInput {
 
 export interface UpdateTripInput {
   title?: string;
-  shortCode?: string;
   startDate?: string;
   endDate?: string;
   places?: string;
@@ -100,10 +98,12 @@ export interface TripStarStateProvider {
   createBookings(input: CreateBookingInput[]): Promise<Booking[]>;
   updateBooking(id: Id, input: UpdateBookingInput): Promise<Booking>;
   assignBookingToTrip(bookingId: Id, tripId: Id | null): Promise<Booking>;
+  deleteBooking(id: Id): Promise<Booking>;
 
   listDocuments(): Promise<DocumentRecord[]>;
   createDocument(input: CreateDocumentInput): Promise<DocumentRecord>;
   assignDocumentToTrip(documentId: Id, tripId: Id | null): Promise<DocumentRecord>;
+  deleteDocument(id: Id): Promise<DocumentRecord>;
 
   appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp">): Promise<ActivityLogEntry>;
   listActivity(): Promise<ActivityLogEntry[]>;

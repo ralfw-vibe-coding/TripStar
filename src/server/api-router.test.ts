@@ -8,7 +8,6 @@ const now = "2026-05-26T09:00:00.000Z";
 const trip: Trip = {
   id: "trip_200",
   tripNumber: "200",
-  shortCode: "TST",
   title: "Test Trip",
   ownerUserId: "user_ralf",
   startDate: "2026-07-01",
@@ -140,7 +139,7 @@ describe("API router", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
-    expect(body.shortCode).toBe("AMSTE");
+    expect(body).toMatchObject({ tripNumber: "201", title: "Amsterdam" });
   });
 
   it("assigns booking trip through PATCH /api/bookings/:id/trip", async () => {
@@ -175,6 +174,17 @@ describe("API router", () => {
 
     await expect(tripResponse.json()).resolves.toMatchObject({ title: "Trip Updated" });
     await expect(bookingResponse.json()).resolves.toMatchObject({ title: "Hotel Updated" });
+  });
+
+  it("deletes bookings through DELETE /api/bookings/:id", async () => {
+    const response = await handleApiRequest(
+      new Request("http://localhost/api/bookings/booking_1", {
+        method: "DELETE",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ booking: { id: "booking_1" }, deletedDocumentId: null });
   });
 
   it("returns activity log and rejects non-json command bodies", async () => {

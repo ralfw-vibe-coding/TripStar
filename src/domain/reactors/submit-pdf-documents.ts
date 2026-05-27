@@ -75,7 +75,7 @@ async function submitSinglePdfDocument(
       tripId,
       sourceDocumentId: document.id,
       participantUserIds: [currentUserId],
-      status: "inbox",
+      status: "reviewed",
     })),
   );
 

@@ -74,6 +74,7 @@ describe("submitImageDocument", () => {
     expect(result.bookings[0]).toMatchObject({
       sourceDocumentId: result.document?.id,
       participantUserIds: ["user_1"],
+      status: "reviewed",
       title: "Hotel Berlin",
     });
   });

@@ -79,7 +79,7 @@ export async function submitImageDocument(
       tripId: input.tripId,
       sourceDocumentId: document.id,
       participantUserIds: [input.currentUserId],
-      status: "inbox",
+      status: "reviewed",
     })),
   );
 

@@ -247,7 +247,7 @@ textarea:disabled {
 
 .trip-row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
+  grid-template-columns: 14px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 10px;
   min-height: 56px;
@@ -282,6 +282,19 @@ textarea:disabled {
   grid-column: 2;
   color: #667085;
   font-size: 13px;
+}
+
+.trip-edit-button {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #667085;
 }
 
 .nav {
@@ -340,7 +353,7 @@ textarea:disabled {
 
 .calendar-filters {
   display: grid;
-  grid-template-columns: minmax(180px, 1.5fr) minmax(150px, 1fr) auto;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(170px, 1fr) minmax(150px, 1fr) auto;
   align-items: end;
   gap: 10px;
   padding: 10px;
@@ -536,12 +549,29 @@ textarea:disabled {
 
 .booking-trip,
 .status-pill,
-.flight-link {
+.flight-link,
+.delete-booking-button {
   border: 1px solid #cfd8df;
   border-radius: 999px;
   padding: 4px 8px;
   background: #ffffff;
   white-space: nowrap;
+}
+
+.delete-booking-button {
+  min-width: 30px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a1f1f;
+  cursor: pointer;
+}
+
+.delete-booking-button.confirm {
+  border-color: #e0a6a6;
+  background: #fff1f1;
+  font-weight: 800;
 }
 
 .participant-chips {
