@@ -887,6 +887,30 @@ textarea:disabled {
   width: min(100%, 680px);
 }
 
+.activity-log-dialog {
+  width: min(100%, 900px);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(24, 33, 47, 0.22);
+}
+
+.activity-log-dialog .protocol-stack {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.dialog-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .analysis-status {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);

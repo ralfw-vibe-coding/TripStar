@@ -10,6 +10,8 @@ import {
   Pencil,
   Plane,
   Plus,
+  RefreshCw,
+  ScrollText,
   Trash2,
   UserCircle,
   TrainFront,
@@ -68,8 +70,8 @@ export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [view, setView] = useState<CalendarView | null>(null);
-  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [analysisJobs, setAnalysisJobs] = useState<AnalysisJob[]>([]);
+  const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [documentViewer, setDocumentViewer] = useState<DocumentOriginalView | null>(null);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [pendingDeleteBookingId, setPendingDeleteBookingId] = useState<string | null>(null);
@@ -329,9 +331,8 @@ export function App() {
   }
 
   async function reloadCalendar() {
-    const [calendar, activity, jobs] = await Promise.all([fetchCalendar(), fetchActivityLog(), fetchAnalysisJobs()]);
+    const [calendar, jobs] = await Promise.all([fetchCalendar(), fetchAnalysisJobs()]);
     setView(calendar);
-    setActivityLog(activity);
     setAnalysisJobs(jobs);
   }
 
@@ -378,6 +379,16 @@ export function App() {
               >
                 <UserCircle size={16} />
                 Profile
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsActivityLogOpen(true);
+                  setIsProfileMenuOpen(false);
+                }}
+              >
+                <ScrollText size={16} />
+                Activity log
               </button>
               <button type="button" onClick={handleLogout}>
                 <LogOut size={16} />
@@ -441,7 +452,6 @@ export function App() {
             onClearPendingDelete={() => setPendingDeleteBookingId(null)}
             onAddDocument={() => setIsDocumentDialogOpen(true)}
             onOpenDocument={handleOpenDocument}
-            activityLog={activityLog}
             analysisJobs={analysisJobs}
           />
         ) : (
@@ -465,6 +475,10 @@ export function App() {
 
       {isProfileDialogOpen && (
         <ProfileDialog user={currentUser} onClose={() => setIsProfileDialogOpen(false)} onSave={handleProfileUpdate} />
+      )}
+
+      {isActivityLogOpen && (
+        <ActivityLogDialog analysisJobs={analysisJobs} onClose={() => setIsActivityLogOpen(false)} />
       )}
 
       {isDocumentDialogOpen && view && (
@@ -666,6 +680,75 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
   );
 }
 
+function ActivityLogDialog({ analysisJobs, onClose }: { analysisJobs: AnalysisJob[]; onClose: () => void }) {
+  const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  async function load() {
+    setIsLoading(true);
+    try {
+      const log = await fetchActivityLog();
+      setEntries(log);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  // Auto-refresh while analysis jobs are running
+  useEffect(() => {
+    if (!analysisJobs.some((j) => j.status === "queued" || j.status === "running")) return;
+    const timer = window.setInterval(() => void load(), 2000);
+    return () => window.clearInterval(timer);
+  }, [analysisJobs]);
+
+  const hasRunningJobs = analysisJobs.some((j) => j.status === "queued" || j.status === "running");
+
+  const displayEntries = entries.filter(
+    (e) => e.scope === "analysis" || e.scope === "inbox" || e.scope === "documents",
+  );
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="activity-log-dialog">
+        <header className="dialog-header">
+          <div>
+            <h2>Activity log</h2>
+            <p>{isLoading && entries.length === 0 ? "Loading…" : `${displayEntries.length} entries`}</p>
+          </div>
+          <div className="dialog-header-actions">
+            {hasRunningJobs && <LoaderCircle className="protocol-spinner" size={16} aria-hidden="true" />}
+            <button className="icon-command" type="button" aria-label="Refresh" onClick={load} disabled={isLoading}>
+              <RefreshCw size={16} className={isLoading ? "protocol-spinner" : ""} />
+            </button>
+            <button className="icon-command" type="button" aria-label="Close" onClick={onClose}>
+              <X size={18} />
+            </button>
+          </div>
+        </header>
+        <div className="protocol-stack">
+          {isLoading && entries.length === 0 ? (
+            <div className="empty-protocol">Loading…</div>
+          ) : displayEntries.length === 0 ? (
+            <div className="empty-protocol">No entries yet.</div>
+          ) : (
+            displayEntries.map((entry) => <ProtocolRow key={entry.id} entry={entry} />)
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CalendarPanel({
   view,
   currentUser,
@@ -679,7 +762,6 @@ function CalendarPanel({
   onClearPendingDelete,
   onAddDocument,
   onOpenDocument,
-  activityLog,
   analysisJobs,
 }: {
   view: CalendarView | null;
@@ -694,7 +776,6 @@ function CalendarPanel({
   onClearPendingDelete: () => void;
   onAddDocument: () => void;
   onOpenDocument: (documentId: string) => void;
-  activityLog: ActivityLogEntry[];
   analysisJobs: AnalysisJob[];
 }) {
   const [tripFilter, setTripFilter] = useState("all");
@@ -797,7 +878,6 @@ function CalendarPanel({
           </div>
         ))}
       </div>
-      <AnalysisProtocol entries={activityLog} jobs={analysisJobs} />
     </section>
   );
 }
