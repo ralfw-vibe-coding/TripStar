@@ -113,6 +113,24 @@ export interface ActivityLogEntry {
   details: unknown | null;
 }
 
+export type AnalysisJobStatus = "queued" | "running" | "done" | "failed";
+
+export type AnalysisJobSourceType = "text" | "screenshot" | "pdf";
+
+export interface AnalysisJob {
+  id: Id;
+  status: AnalysisJobStatus;
+  sourceType: AnalysisJobSourceType;
+  documentName: string;
+  tripId: Id | null;
+  currentUserId: Id;
+  bookingCount: number | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
 export interface CalendarBooking extends Booking {
   trip: Pick<Trip, "id" | "tripNumber" | "title" | "color"> | null;
 }

@@ -6,9 +6,7 @@ import { getStateProvider } from "../domain/provider-factory";
 import { LocalDocumentStorageProvider } from "../domain/providers/local/local-document-storage-provider";
 import { OpenAIBookingAnalysisProvider } from "../domain/providers/openai/openai-booking-analysis-provider";
 import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../domain/providers/state-provider";
-import { submitImageDocument } from "../domain/reactors/submit-image-document";
-import { submitPdfDocuments } from "../domain/reactors/submit-pdf-documents";
-import { submitTextDocument } from "../domain/reactors/submit-text-document";
+import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
 import { existsSync } from "node:fs";
@@ -98,12 +96,13 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
       const body = await readJson<{ text: string; tripId: string | null }>(request);
       return jsonResponse(
-        await submitTextDocument(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
+        await submitAnalysisJob(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
+          sourceType: "text",
           text: body.text,
           tripId: body.tripId,
           currentUserId: user.id,
         }),
-        { status: 201 },
+        { status: 202 },
       );
     }
 
@@ -134,13 +133,14 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
       const body = await readJson<{ base64: string; mimeType: string; tripId: string | null }>(request);
       return jsonResponse(
-        await submitImageDocument(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
+        await submitAnalysisJob(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
+          sourceType: "screenshot",
           base64: body.base64,
           mimeType: body.mimeType,
           tripId: body.tripId,
           currentUserId: user.id,
         }),
-        { status: 201 },
+        { status: 202 },
       );
     }
 
@@ -150,14 +150,31 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         return jsonResponse({ error: "Authentication required." }, { status: 401 });
       }
       const body = await readJson<{ documents: Array<{ base64: string; originalFileName: string }>; tripId: string | null }>(request);
-      return jsonResponse(
-        await submitPdfDocuments(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
-          documents: body.documents,
-          tripId: body.tripId,
-          currentUserId: user.id,
-        }),
-        { status: 201 },
+      if (body.documents.length === 0) {
+        throw new Error("At least one PDF document is required.");
+      }
+      const storage = createDocumentStorageProvider();
+      const analyzer = createBookingAnalysisProvider();
+      const jobs = await Promise.all(
+        body.documents.map((document) =>
+          submitAnalysisJob(provider, storage, analyzer, {
+            sourceType: "pdf",
+            documents: [document],
+            documentName: document.originalFileName,
+            tripId: body.tripId,
+            currentUserId: user.id,
+          }).then((result) => result.job),
+        ),
       );
+      return jsonResponse({ jobs }, { status: 202 });
+    }
+
+    if (request.method === "GET" && segments[0] === "analysis-jobs" && segments.length === 1) {
+      const user = await getCurrentUser(provider, bearerToken(request));
+      if (!user) {
+        return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      }
+      return jsonResponse((await provider.listAnalysisJobs()).filter((job) => job.currentUserId === user.id));
     }
 
     if (request.method === "GET" && segments[0] === "activity-log" && segments.length === 1) {

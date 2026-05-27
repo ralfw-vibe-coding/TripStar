@@ -1,5 +1,6 @@
 import type {
   ActivityLogEntry,
+  AnalysisJob,
   AuthSession,
   Booking,
   CalendarBooking,
@@ -14,10 +15,12 @@ import type {
   CreateTripInput,
   CreateBookingInput,
   CreateDocumentInput,
+  CreateAnalysisJobInput,
   RequestOtpResult,
   TripStarStateProvider,
   UpdateUserProfileInput,
   UpdateBookingInput,
+  UpdateAnalysisJobInput,
   UpdateTripInput,
   VerifyOtpResult,
 } from "../state-provider";
@@ -32,6 +35,7 @@ interface LocalStateProviderOptions {
   trips?: Trip[];
   bookings?: Booking[];
   documents?: DocumentRecord[];
+  analysisJobs?: AnalysisJob[];
   activity?: ActivityLogEntry[];
   otpChallenges?: OtpChallenge[];
   authSessions?: AuthSession[];
@@ -45,6 +49,7 @@ interface PersistedLocalState {
   trips: Trip[];
   bookings: Booking[];
   documents: DocumentRecord[];
+  analysisJobs?: AnalysisJob[];
   activity: ActivityLogEntry[];
   otpChallenges?: OtpChallenge[];
   authSessions?: AuthSession[];
@@ -63,6 +68,7 @@ export class LocalStateProvider implements TripStarStateProvider {
   private trips: Trip[];
   private bookings: Booking[];
   private documents: DocumentRecord[];
+  private analysisJobs: AnalysisJob[] = [];
   private activity: ActivityLogEntry[] = [];
   private otpChallenges: OtpChallenge[] = [];
   private authSessions: AuthSession[] = [];
@@ -76,6 +82,7 @@ export class LocalStateProvider implements TripStarStateProvider {
     this.trips = this.normalizeTrips(clone(options.trips ?? persisted?.trips ?? seedTrips));
     this.bookings = this.normalizeBookings(clone(options.bookings ?? persisted?.bookings ?? seedBookings));
     this.documents = clone(options.documents ?? persisted?.documents ?? seedDocuments);
+    this.analysisJobs = clone(options.analysisJobs ?? persisted?.analysisJobs ?? []);
     this.activity = clone(options.activity ?? persisted?.activity ?? []);
     this.otpChallenges = clone(options.otpChallenges ?? persisted?.otpChallenges ?? []);
     this.authSessions = clone(options.authSessions ?? persisted?.authSessions ?? []);
@@ -402,6 +409,40 @@ export class LocalStateProvider implements TripStarStateProvider {
     return clone(document);
   }
 
+  async listAnalysisJobs(): Promise<AnalysisJob[]> {
+    return clone(this.analysisJobs);
+  }
+
+  async createAnalysisJob(input: CreateAnalysisJobInput): Promise<AnalysisJob> {
+    if (input.tripId !== null) {
+      this.requireTrip(input.tripId);
+    }
+    const timestamp = isoDate(this.now());
+    const job: AnalysisJob = {
+      id: createId("analysis"),
+      status: "queued",
+      sourceType: input.sourceType,
+      documentName: input.documentName,
+      tripId: input.tripId,
+      currentUserId: input.currentUserId,
+      bookingCount: null,
+      error: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      completedAt: null,
+    };
+    this.analysisJobs.unshift(job);
+    this.persist();
+    return clone(job);
+  }
+
+  async updateAnalysisJob(id: Id, input: UpdateAnalysisJobInput): Promise<AnalysisJob> {
+    const job = this.requireAnalysisJob(id);
+    Object.assign(job, input, { updatedAt: isoDate(this.now()) });
+    this.persist();
+    return clone(job);
+  }
+
   async appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp">): Promise<ActivityLogEntry> {
     const activity: ActivityLogEntry = {
       ...entry,
@@ -469,6 +510,14 @@ export class LocalStateProvider implements TripStarStateProvider {
     return document;
   }
 
+  private requireAnalysisJob(id: Id): AnalysisJob {
+    const job = this.analysisJobs.find((candidate) => candidate.id === id);
+    if (!job) {
+      throw new Error(`Analysis job not found: ${id}`);
+    }
+    return job;
+  }
+
   private nextTripNumber(): string {
     const numbers = this.trips
       .map((trip) => Number.parseInt(trip.tripNumber, 10))
@@ -530,6 +579,7 @@ export class LocalStateProvider implements TripStarStateProvider {
           trips: this.trips,
           bookings: this.bookings,
           documents: this.documents,
+          analysisJobs: this.analysisJobs,
           activity: this.activity,
           otpChallenges: this.otpChallenges,
           authSessions: this.authSessions,

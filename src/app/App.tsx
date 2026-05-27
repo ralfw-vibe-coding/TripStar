@@ -28,12 +28,13 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ActivityLogEntry, CalendarBooking, CalendarView, Trip, User } from "../domain/model";
+import type { ActivityLogEntry, AnalysisJob, CalendarBooking, CalendarView, Trip, User } from "../domain/model";
 import {
   assignBookingTrip,
   clearAuthToken,
   createTrip,
   deleteBooking,
+  fetchAnalysisJobs,
   fetchActivityLog,
   fetchCalendar,
   fetchCurrentUser,
@@ -67,6 +68,7 @@ export function App() {
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [view, setView] = useState<CalendarView | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [analysisJobs, setAnalysisJobs] = useState<AnalysisJob[]>([]);
   const [documentViewer, setDocumentViewer] = useState<DocumentOriginalView | null>(null);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [pendingDeleteBookingId, setPendingDeleteBookingId] = useState<string | null>(null);
@@ -96,6 +98,14 @@ export function App() {
     void reloadWorkspace()
       .catch((caught: Error) => setError(caught.message));
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || !analysisJobs.some((job) => job.status === "queued" || job.status === "running")) return;
+    const timer = window.setInterval(() => {
+      void reloadWorkspace().catch((caught: Error) => setError(caught.message));
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [currentUser?.id, analysisJobs]);
 
   useEffect(() => {
     if (!pendingDeleteBookingId) return;
@@ -280,6 +290,7 @@ export function App() {
     clearAuthToken();
     setCurrentUser(null);
     setView(null);
+    setAnalysisJobs([]);
     setIsProfileMenuOpen(false);
   }
 
@@ -291,9 +302,10 @@ export function App() {
   }
 
   async function reloadCalendar() {
-    const [calendar, activity] = await Promise.all([fetchCalendar(), fetchActivityLog()]);
+    const [calendar, activity, jobs] = await Promise.all([fetchCalendar(), fetchActivityLog(), fetchAnalysisJobs()]);
     setView(calendar);
     setActivityLog(activity);
+    setAnalysisJobs(jobs);
   }
 
   async function reloadWorkspace() {
@@ -402,6 +414,7 @@ export function App() {
             onAddDocument={() => setIsDocumentDialogOpen(true)}
             onOpenDocument={handleOpenDocument}
             activityLog={activityLog}
+            analysisJobs={analysisJobs}
           />
         ) : (
           <ReportsPanel trips={view?.trips ?? []} />
@@ -433,7 +446,7 @@ export function App() {
           onRefresh={reloadWorkspace}
           onSubmitted={async () => {
             setIsDocumentDialogOpen(false);
-            await reloadCalendar();
+            await reloadWorkspace();
           }}
         />
       )}
@@ -638,6 +651,7 @@ function CalendarPanel({
   onAddDocument,
   onOpenDocument,
   activityLog,
+  analysisJobs,
 }: {
   view: CalendarView | null;
   currentUser: User;
@@ -651,6 +665,7 @@ function CalendarPanel({
   onAddDocument: () => void;
   onOpenDocument: (documentId: string) => void;
   activityLog: ActivityLogEntry[];
+  analysisJobs: AnalysisJob[];
 }) {
   const [tripFilter, setTripFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
@@ -683,6 +698,8 @@ function CalendarPanel({
           <FileUp size={18} />
         </button>
       </header>
+
+      <AnalysisProgress jobs={analysisJobs} />
 
       <section className="calendar-filters" aria-label="Calendar filters">
         <label>
@@ -749,7 +766,29 @@ function CalendarPanel({
           </div>
         ))}
       </div>
-      <AnalysisProtocol entries={activityLog} />
+      <AnalysisProtocol entries={activityLog} jobs={analysisJobs} />
+    </section>
+  );
+}
+
+function AnalysisProgress({ jobs }: { jobs: AnalysisJob[] }) {
+  const activeJobs = jobs.filter((job) => job.status === "queued" || job.status === "running");
+  if (activeJobs.length === 0) return null;
+
+  const runningCount = activeJobs.filter((job) => job.status === "running").length;
+  const queuedCount = activeJobs.length - runningCount;
+  return (
+    <section className="analysis-progress" role="status" aria-live="polite">
+      <div>
+        <strong>Analyzing documents</strong>
+        <span>
+          {runningCount > 0 ? `${runningCount} running` : "Starting"}
+          {queuedCount > 0 ? `, ${queuedCount} queued` : ""}
+        </span>
+      </div>
+      <div className="analysis-progress-track" aria-hidden="true">
+        <span />
+      </div>
     </section>
   );
 }
@@ -1076,15 +1115,19 @@ function usersForIds(users: User[], userIds: string[]): User[] {
   });
 }
 
-function AnalysisProtocol({ entries }: { entries: ActivityLogEntry[] }) {
-  const analysisEntries = entries.filter((entry) => entry.scope === "documents").slice(0, 12);
+function AnalysisProtocol({ entries, jobs }: { entries: ActivityLogEntry[]; jobs: AnalysisJob[] }) {
+  const stagedEntries = entries.filter((entry) => entry.scope === "analysis");
+  const fallbackEntries = entries.filter((entry) => entry.scope === "documents");
+  const analysisEntries = (stagedEntries.length > 0 ? stagedEntries : fallbackEntries).slice(0, 18);
+  const hasRunningJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
   return (
-    <section className="analysis-protocol" aria-label="Analysis protocol">
+    <section className="analysis-protocol" aria-label="Analysis log">
       <header className="section-header compact">
         <div>
-          <h2>Protocol</h2>
-          <p>{analysisEntries.length} recent analyses</p>
+          <h2>Log</h2>
+          <p>{analysisEntries.length} recent entries</p>
         </div>
+        {hasRunningJobs && <LoaderCircle className="protocol-spinner" size={16} aria-hidden="true" />}
       </header>
       <div className="protocol-stack">
         {analysisEntries.length === 0 ? (
@@ -1099,41 +1142,66 @@ function AnalysisProtocol({ entries }: { entries: ActivityLogEntry[] }) {
 
 function ProtocolRow({ entry }: { entry: ActivityLogEntry }) {
   const details = documentActivityDetails(entry.details);
-  const result = protocolResult(entry, details.bookingCount);
+  const result = protocolResult(entry, details.bookingCount, details.status);
   return (
-    <article className={`protocol-row ${entry.level}`}>
+    <article className={`protocol-row ${entry.level} ${details.status ?? ""}`}>
       <time>{formatProtocolTime(entry.timestamp)}</time>
-      <span>{entry.level.toUpperCase()}</span>
-      <span>{protocolSource(entry)}</span>
+      <span>{protocolLevel(entry, details.status)}</span>
+      <span>{protocolSource(entry, details.sourceType)}</span>
       <span>{result}</span>
       <span>{protocolMessage(entry, details.bookingCount)}</span>
     </article>
   );
 }
 
-function documentActivityDetails(details: unknown): { bookingCount: number | null } {
-  if (!details || typeof details !== "object" || !("bookingCount" in details)) {
-    return { bookingCount: null };
+function documentActivityDetails(details: unknown): {
+  bookingCount: number | null;
+  status: AnalysisJob["status"] | null;
+  sourceType: AnalysisJob["sourceType"] | null;
+} {
+  if (!details || typeof details !== "object") {
+    return { bookingCount: null, status: null, sourceType: null };
   }
-  const bookingCount = (details as { bookingCount?: unknown }).bookingCount;
-  return { bookingCount: typeof bookingCount === "number" ? bookingCount : null };
+  const data = details as { bookingCount?: unknown; status?: unknown; sourceType?: unknown };
+  const bookingCount = data.bookingCount;
+  const status = typeof data.status === "string" && ["queued", "running", "done", "failed"].includes(data.status) ? data.status : null;
+  const sourceType =
+    typeof data.sourceType === "string" && ["text", "screenshot", "pdf"].includes(data.sourceType) ? data.sourceType : null;
+  return {
+    bookingCount: typeof bookingCount === "number" ? bookingCount : null,
+    status: status as AnalysisJob["status"] | null,
+    sourceType: sourceType as AnalysisJob["sourceType"] | null,
+  };
 }
 
 function formatProtocolTime(value: string): string {
   return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   }).format(new Date(value));
 }
 
-function protocolSource(entry: ActivityLogEntry): string {
+function protocolLevel(entry: ActivityLogEntry, status: AnalysisJob["status"] | null): string {
+  return status ? status.toUpperCase() : entry.level.toUpperCase();
+}
+
+function protocolSource(entry: ActivityLogEntry, sourceType: AnalysisJob["sourceType"] | null): string {
+  if (sourceType === "screenshot") return "SCREEN";
+  if (sourceType === "text") return "TEXT";
+  if (sourceType === "pdf") return "PDF";
   if (entry.documentName === "Clipboard screenshot") return "SCREEN";
   if (entry.documentName === "Texteingabe") return "TEXT";
   return "DOC";
 }
 
-function protocolResult(entry: ActivityLogEntry, bookingCount: number | null): string {
+function protocolResult(entry: ActivityLogEntry, bookingCount: number | null, status: AnalysisJob["status"] | null): string {
+  if (status === "queued") return "WAITING";
+  if (status === "running") return "RUNNING";
+  if (status === "failed") return "ERROR";
   if (entry.level === "error") return "ERROR";
   if (bookingCount === 0) return "NONE";
   if (bookingCount === 1) return "1 BOOKING";
@@ -1187,27 +1255,23 @@ function TextDocumentDialog({
     setNotice(null);
     setIsSubmitting(true);
     try {
-      const result =
-        inputMode === "upload"
-          ? await submitPdfDocuments({
-              documents: pdfFiles.map((file) => ({ base64: file.base64, originalFileName: file.name })),
-              tripId: tripId || null,
-            })
-          : screenshot !== null
-          ? await submitImageDocument({
-              base64: screenshot?.base64 ?? "",
-              mimeType: screenshot?.mimeType ?? "",
-              tripId: tripId || null,
-            })
-          : await submitTextDocument({ text, tripId: tripId || null });
-      if (result.bookings.length === 0) {
-        setNotice("No bookings found. The document was not stored.");
-        await onRefresh();
-        return;
+      if (inputMode === "upload") {
+        await submitPdfDocuments({
+          documents: pdfFiles.map((file) => ({ base64: file.base64, originalFileName: file.name })),
+          tripId: tripId || null,
+        });
+      } else if (screenshot !== null) {
+        await submitImageDocument({
+          base64: screenshot?.base64 ?? "",
+          mimeType: screenshot?.mimeType ?? "",
+          tripId: tripId || null,
+        });
+      } else {
+        await submitTextDocument({ text, tripId: tripId || null });
       }
       await onSubmitted();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not analyze document.");
+      setError(caught instanceof Error ? caught.message : "Could not submit document.");
       await onRefresh().catch(() => undefined);
     } finally {
       setIsSubmitting(false);

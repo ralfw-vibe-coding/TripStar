@@ -1,4 +1,4 @@
-import type { ActivityLogEntry, AuthSession, Booking, CalendarView, Trip, User } from "../domain/model";
+import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, Trip, User } from "../domain/model";
 import type { CreateTripInput, UpdateTripInput } from "../domain/providers/state-provider";
 
 const authTokenStorageKey = "tripstar.authToken";
@@ -40,6 +40,10 @@ export function fetchCalendar(): Promise<CalendarView> {
 
 export function fetchActivityLog(): Promise<ActivityLogEntry[]> {
   return requestJson<ActivityLogEntry[]>("/api/activity-log");
+}
+
+export function fetchAnalysisJobs(): Promise<AnalysisJob[]> {
+  return requestJson<AnalysisJob[]>("/api/analysis-jobs");
 }
 
 export function createTrip(input: CreateTripInput): Promise<Trip> {
@@ -106,8 +110,7 @@ export function updateProfile(input: { shortCode: string }): Promise<{ user: Use
 }
 
 export function submitTextDocument(input: { text: string; tripId: string | null }): Promise<{
-  document: unknown | null;
-  bookings: Booking[];
+  job: AnalysisJob;
 }> {
   return requestJson("/api/documents/text", {
     method: "POST",
@@ -116,8 +119,7 @@ export function submitTextDocument(input: { text: string; tripId: string | null 
 }
 
 export function submitImageDocument(input: { base64: string; mimeType: string; tripId: string | null }): Promise<{
-  document: unknown | null;
-  bookings: Booking[];
+  job: AnalysisJob;
 }> {
   return requestJson("/api/documents/image", {
     method: "POST",
@@ -129,8 +131,7 @@ export function submitPdfDocuments(input: {
   documents: Array<{ base64: string; originalFileName: string }>;
   tripId: string | null;
 }): Promise<{
-  documents: unknown[];
-  bookings: Booking[];
+  jobs: AnalysisJob[];
 }> {
   return requestJson("/api/documents/pdf", {
     method: "POST",

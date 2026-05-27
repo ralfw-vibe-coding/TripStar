@@ -1,4 +1,4 @@
-import type { ActivityLogEntry, AuthSession, Booking, CalendarView, DocumentRecord, Id, Trip, User } from "../model";
+import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Id, Trip, User } from "../model";
 
 export interface CreateTripInput {
   title: string;
@@ -67,6 +67,20 @@ export interface CreateBookingInput {
   extractedJson: unknown | null;
 }
 
+export interface CreateAnalysisJobInput {
+  sourceType: AnalysisJob["sourceType"];
+  documentName: string;
+  tripId: Id | null;
+  currentUserId: Id;
+}
+
+export interface UpdateAnalysisJobInput {
+  status?: AnalysisJob["status"];
+  bookingCount?: number | null;
+  error?: string | null;
+  completedAt?: string | null;
+}
+
 export interface RequestOtpResult {
   email: string;
   expiresAt: string;
@@ -104,6 +118,10 @@ export interface TripStarStateProvider {
   createDocument(input: CreateDocumentInput): Promise<DocumentRecord>;
   assignDocumentToTrip(documentId: Id, tripId: Id | null): Promise<DocumentRecord>;
   deleteDocument(id: Id): Promise<DocumentRecord>;
+
+  listAnalysisJobs(): Promise<AnalysisJob[]>;
+  createAnalysisJob(input: CreateAnalysisJobInput): Promise<AnalysisJob>;
+  updateAnalysisJob(id: Id, input: UpdateAnalysisJobInput): Promise<AnalysisJob>;
 
   appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp">): Promise<ActivityLogEntry>;
   listActivity(): Promise<ActivityLogEntry[]>;

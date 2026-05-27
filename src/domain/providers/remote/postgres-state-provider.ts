@@ -1,12 +1,14 @@
-import type { ActivityLogEntry, Booking, CalendarView, DocumentRecord, Id, Trip, User } from "../../model";
+import type { ActivityLogEntry, AnalysisJob, Booking, CalendarView, DocumentRecord, Id, Trip, User } from "../../model";
 import type {
   CreateTripInput,
   CreateBookingInput,
   CreateDocumentInput,
+  CreateAnalysisJobInput,
   RequestOtpResult,
   TripStarStateProvider,
   UpdateUserProfileInput,
   UpdateBookingInput,
+  UpdateAnalysisJobInput,
   UpdateTripInput,
   VerifyOtpResult,
 } from "../state-provider";
@@ -83,6 +85,18 @@ export class PostgresStateProvider implements TripStarStateProvider {
   }
 
   async deleteDocument(_id: Id): Promise<DocumentRecord> {
+    return this.notImplemented();
+  }
+
+  async listAnalysisJobs(): Promise<AnalysisJob[]> {
+    return this.notImplemented();
+  }
+
+  async createAnalysisJob(_input: CreateAnalysisJobInput): Promise<AnalysisJob> {
+    return this.notImplemented();
+  }
+
+  async updateAnalysisJob(_id: Id, _input: UpdateAnalysisJobInput): Promise<AnalysisJob> {
     return this.notImplemented();
   }
 
