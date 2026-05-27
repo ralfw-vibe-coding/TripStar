@@ -3,10 +3,6 @@ import { getCurrentUser, requestLoginOtp, verifyLoginOtp } from "../domain/rpus/
 import { getCalendar } from "../domain/rpus/calendar";
 import { createTrip, listTrips, updateTrip } from "../domain/rpus/trips";
 import { getStateProvider } from "../domain/provider-factory";
-import { LocalDocumentStorageProvider } from "../domain/providers/local/local-document-storage-provider";
-import { OpenAIBookingAnalysisProvider } from "../domain/providers/openai/openai-booking-analysis-provider";
-import { R2DocumentStorageProvider } from "../domain/providers/remote/r2-document-storage-provider";
-import type { DocumentStorageProvider } from "../domain/providers/document-storage-provider";
 import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../domain/providers/state-provider";
 import type { IngestPart } from "../domain/model";
 import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
@@ -14,12 +10,11 @@ import { receiveIngestPart, queueIngestProcessing } from "../domain/reactors/ing
 import { sendOtpEmail } from "./email";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
-import { existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { createBookingAnalysisProvider, createDocumentStorageProvider } from "./provider-factories";
 
 loadLocalEnv();
 
-export async function handleApiRequest(request: Request, waitUntil?: (promise: Promise<void>) => void): Promise<Response> {
+export async function handleApiRequest(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api\/?/, "");
@@ -223,7 +218,7 @@ export async function handleApiRequest(request: Request, waitUntil?: (promise: P
         return jsonResponse({ error: `Unknown sender: ${part.sender}` }, { status: 403 });
       }
       if (received.status === "ready_to_process") {
-        queueIngestProcessing(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), part.txId, part.sender, received.userId, waitUntil);
+        await triggerIngestProcessing(provider, part.txId, part.sender, received.userId, expectedToken);
       }
       return jsonResponse({ status: received.status }, { status: 202 });
     }
@@ -240,43 +235,48 @@ function bearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
-function createBookingAnalysisProvider(): OpenAIBookingAnalysisProvider {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is required for booking analysis.");
+/**
+ * On Netlify (process.env.URL is set): POST to the Background Function which
+ * has a 15-minute timeout — enough for any PDF + OpenAI round-trip.
+ * Locally (no URL env var): fall back to setTimeout so the work runs after
+ * the response without blocking it.
+ */
+async function triggerIngestProcessing(
+  state: ReturnType<typeof getStateProvider>,
+  txId: string,
+  sender: string,
+  userId: string,
+  ingestToken: string,
+): Promise<void> {
+  const siteUrl = process.env.URL;
+  if (siteUrl) {
+    try {
+      await fetch(`${siteUrl}/.netlify/functions/process-ingest-background`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${ingestToken}`,
+        },
+        body: JSON.stringify({ txId, sender, userId }),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await state.appendActivity({
+        level: "error",
+        scope: "inbox",
+        message: `[Inbox] Failed to trigger background processing for ${txId}: ${msg}`,
+        documentName: null,
+        details: { txId },
+      });
+    }
+  } else {
+    queueIngestProcessing(
+      state,
+      createDocumentStorageProvider(),
+      createBookingAnalysisProvider(),
+      txId,
+      sender,
+      userId,
+    );
   }
-  return new OpenAIBookingAnalysisProvider(apiKey, process.env.OPENAI_MODEL ?? "gpt-5.4-mini");
-}
-
-function createDocumentStorageProvider(): DocumentStorageProvider {
-  if (process.env.TRIPSTAR_FILE_STORAGE === "r2") {
-    return new R2DocumentStorageProvider({
-      bucket: requiredEnv("R2_BUCKET"),
-      accountId: requiredEnv("R2_ACCOUNT_ID"),
-      accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
-    });
-  }
-  const localPersistenceDir = process.env.LOCAL_PERSISTENCE_DIR ?? "./data";
-  return new LocalDocumentStorageProvider(join(resolveLocalPersistenceDir(localPersistenceDir), "storage"));
-}
-
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is required.`);
-  }
-  return value;
-}
-
-function resolveLocalPersistenceDir(localPersistenceDir: string): string {
-  if (isAbsolute(localPersistenceDir)) return localPersistenceDir;
-  return resolve(projectRoot(), localPersistenceDir);
-}
-
-function projectRoot(): string {
-  const candidates = [process.env.TRIPSTAR_PROJECT_ROOT, process.env.PWD, process.env.INIT_CWD, process.cwd()].filter(
-    (candidate): candidate is string => Boolean(candidate),
-  );
-  return candidates.find((candidate) => existsSync(join(candidate, "package.json"))) ?? process.cwd();
 }

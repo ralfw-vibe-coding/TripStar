@@ -75,13 +75,10 @@ export async function receiveIngestPart(
 }
 
 /**
- * Slow phase — runs after the HTTP response is sent.
- * Calls OpenAI, stores documents, creates bookings, cleans up.
- *
- * When a `waitUntil` callback is provided (e.g. from Netlify's context.waitUntil),
- * the promise is registered with it so the serverless runtime keeps the function
- * alive until processing completes.  Without it (local dev) we fall back to
- * setTimeout so the work still runs after the response is returned.
+ * Slow phase for local dev — deferred via setTimeout so it runs after the
+ * HTTP response is returned.  In production on Netlify the caller triggers
+ * a Background Function instead (15-minute timeout); this fallback is only
+ * used when process.env.URL is not set (i.e. local dev server).
  */
 export function queueIngestProcessing(
   state: TripStarStateProvider,
@@ -90,18 +87,13 @@ export function queueIngestProcessing(
   txId: string,
   sender: string,
   userId: string,
-  waitUntil?: (promise: Promise<void>) => void,
 ): void {
-  if (waitUntil) {
-    waitUntil(processIngestEmail(state, storage, analyzer, txId, sender, userId));
-  } else {
-    setTimeout(() => {
-      void processIngestEmail(state, storage, analyzer, txId, sender, userId);
-    }, 0);
-  }
+  setTimeout(() => {
+    void processIngestEmail(state, storage, analyzer, txId, sender, userId);
+  }, 0);
 }
 
-async function processIngestEmail(
+export async function processIngestEmail(
   state: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
