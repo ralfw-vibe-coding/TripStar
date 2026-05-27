@@ -70,7 +70,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === "GET" && segments[0] === "calendar" && segments.length === 1) {
-      return jsonResponse(await getCalendar(provider));
+      if (!currentUserId) {
+        return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      }
+      return jsonResponse(await getCalendar(provider, currentUserId));
     }
 
     if (segments[0] === "trips") {

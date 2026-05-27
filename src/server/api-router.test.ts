@@ -2,9 +2,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalStateProvider } from "../domain/providers/local/local-state-provider";
 import { setStateProviderForTests } from "../domain/provider-factory";
 import { handleApiRequest } from "./api-router";
-import type { Booking, Trip } from "../domain/model";
+import type { AuthSession, Booking, Trip, User } from "../domain/model";
 
 const now = "2026-05-26T09:00:00.000Z";
+
+// Shared test user with a known auth token so tests can call authenticated endpoints
+const testUser: User = {
+  id: "user_ralf",
+  email: "ralf@example.com",
+  shortCode: "RAF",
+  createdAt: now,
+  updatedAt: now,
+};
+const testSession: AuthSession = {
+  token: "test-token",
+  userId: "user_ralf",
+  expiresAt: "2099-01-01T00:00:00.000Z",
+  createdAt: now,
+  revokedAt: null,
+};
+const authHeader = { authorization: "Bearer test-token" };
+
 const trip: Trip = {
   id: "trip_200",
   tripNumber: "200",
@@ -32,7 +50,7 @@ const booking: Booking = {
   fromText: null,
   toText: null,
   travelers: [],
-  participantUserIds: [],
+  participantUserIds: ["user_ralf"], // visible in calendar as inbox booking
   status: "inbox",
   serviceIdentifier: null,
   operator: null,
@@ -50,6 +68,8 @@ describe("API router", () => {
     setStateProviderForTests(
       new LocalStateProvider({
         now: () => new Date(now),
+        users: [testUser],
+        authSessions: [testSession],
         trips: [trip],
         bookings: [booking],
       }),
@@ -57,7 +77,9 @@ describe("API router", () => {
   });
 
   it("returns the calendar view", async () => {
-    const response = await handleApiRequest(new Request("http://localhost/api/calendar"));
+    const response = await handleApiRequest(
+      new Request("http://localhost/api/calendar", { headers: authHeader }),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -191,7 +213,9 @@ describe("API router", () => {
   });
 
   it("returns activity log and rejects non-json command bodies", async () => {
-    const activityResponse = await handleApiRequest(new Request("http://localhost/api/activity-log"));
+    const activityResponse = await handleApiRequest(
+      new Request("http://localhost/api/activity-log", { headers: authHeader }),
+    );
     const badResponse = await handleApiRequest(
       new Request("http://localhost/api/trips", {
         method: "POST",

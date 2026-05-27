@@ -460,7 +460,7 @@ export class LocalStateProvider implements TripStarStateProvider {
   }
 
   async listActivity(userId: string): Promise<ActivityLogEntry[]> {
-    return clone(this.activity.filter((e) => e.userId === userId || e.userId == null));
+    return clone(this.activity.filter((e) => e.userId === userId));
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
@@ -497,10 +497,23 @@ export class LocalStateProvider implements TripStarStateProvider {
     return count;
   }
 
-  async getCalendarView(now: Date = this.now()): Promise<CalendarView> {
-    const trips = await this.listTrips();
+  async getCalendarView(userId: string, now: Date = this.now()): Promise<CalendarView> {
+    const allTrips = await this.listTrips();
+
+    // Only trips the user owns or has been invited to
+    const trips = allTrips.filter(
+      (trip) => trip.ownerUserId === userId || trip.sharedWithUserIds.includes(userId),
+    );
+    const visibleTripIds = new Set(trips.map((t) => t.id));
     const tripById = new Map(trips.map((trip) => [trip.id, trip]));
+
+    // Bookings assigned to a visible trip, plus unassigned inbox bookings that belong to this user
     const bookings = (await this.listBookings())
+      .filter(
+        (booking) =>
+          (booking.tripId !== null && visibleTripIds.has(booking.tripId)) ||
+          (booking.tripId === null && booking.participantUserIds.includes(userId)),
+      )
       .sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? ""))
       .map<CalendarBooking>((booking) => {
         const trip = booking.tripId ? tripById.get(booking.tripId) ?? null : null;

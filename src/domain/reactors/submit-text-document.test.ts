@@ -3,6 +3,7 @@ import { LocalStateProvider } from "../providers/local/local-state-provider";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import { submitTextDocument } from "./submit-text-document";
+import { withUserId } from "../providers/user-context";
 
 function createStorage(): DocumentStorageProvider & { storedCount: number } {
   return {
@@ -130,14 +131,16 @@ describe("submitTextDocument", () => {
     };
 
     await expect(
-      submitTextDocument(state, createStorage(), failingAnalyzer, {
-        text: "Flight to Berlin",
-        tripId: null,
-        currentUserId: "user_1",
-      }),
+      withUserId("user_1", () =>
+        submitTextDocument(state, createStorage(), failingAnalyzer, {
+          text: "Flight to Berlin",
+          tripId: null,
+          currentUserId: "user_1",
+        }),
+      ),
     ).rejects.toThrow("analysis down");
 
-    await expect(state.listActivity("test-user")).resolves.toEqual([
+    await expect(state.listActivity("user_1")).resolves.toEqual([
       expect.objectContaining({
         level: "error",
         scope: "documents",

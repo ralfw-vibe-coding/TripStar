@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LocalStateProvider } from "./local-state-provider";
 import { resetIdsForTests } from "./id";
+import { withUserId } from "../user-context";
 import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -62,14 +63,16 @@ describe("LocalStateProvider", () => {
   it("creates trips and records activity", async () => {
     const provider = new LocalStateProvider({ now: () => fixedNow });
 
-    const trip = await provider.createTrip({
-      title: "Berlin Workshop",
-      ownerUserId: "user_ralf",
-      startDate: "2026-07-01",
-      endDate: "2026-07-03",
-      places: "Berlin",
-      sharedWithUserIds: ["user_mara", "user_ralf"],
-    });
+    const trip = await withUserId("test-user", () =>
+      provider.createTrip({
+        title: "Berlin Workshop",
+        ownerUserId: "user_ralf",
+        startDate: "2026-07-01",
+        endDate: "2026-07-03",
+        places: "Berlin",
+        sharedWithUserIds: ["user_mara", "user_ralf"],
+      }),
+    );
 
     expect(trip).toMatchObject({
       tripNumber: "200",
@@ -356,7 +359,7 @@ describe("LocalStateProvider", () => {
       ],
     });
 
-    const calendar = await provider.getCalendarView(fixedNow);
+    const calendar = await provider.getCalendarView("user_ralf", fixedNow);
     expect(calendar.bookings).toMatchObject([{ id: "past", tripId: "trip_sfo" }]);
   });
 
@@ -423,9 +426,9 @@ describe("LocalStateProvider", () => {
       ],
     });
 
-    await expect(provider.deleteBooking("booking_hotel_1")).resolves.toMatchObject({ deletedAt: fixedIso });
+    await expect(withUserId("test-user", () => provider.deleteBooking("booking_hotel_1"))).resolves.toMatchObject({ deletedAt: fixedIso });
     await expect(provider.listBookings()).resolves.toEqual([]);
-    await expect(provider.deleteDocument("document_1")).resolves.toMatchObject({ deletedAt: fixedIso });
+    await expect(withUserId("test-user", () => provider.deleteDocument("document_1"))).resolves.toMatchObject({ deletedAt: fixedIso });
     await expect(provider.listDocuments()).resolves.toEqual([]);
     await expect(provider.listActivity("test-user")).resolves.toEqual(
       expect.arrayContaining([

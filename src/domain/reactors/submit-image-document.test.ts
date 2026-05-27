@@ -3,6 +3,7 @@ import { LocalStateProvider } from "../providers/local/local-state-provider";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import { submitImageDocument } from "./submit-image-document";
+import { withUserId } from "../providers/user-context";
 
 function createStorage(): DocumentStorageProvider & { storedCount: number } {
   return {
@@ -120,15 +121,17 @@ describe("submitImageDocument", () => {
     };
 
     await expect(
-      submitImageDocument(state, createStorage(), failingAnalyzer, {
-        base64: Buffer.from("image bytes").toString("base64"),
-        mimeType: "image/png",
-        tripId: null,
-        currentUserId: "user_1",
-      }),
+      withUserId("user_1", () =>
+        submitImageDocument(state, createStorage(), failingAnalyzer, {
+          base64: Buffer.from("image bytes").toString("base64"),
+          mimeType: "image/png",
+          tripId: null,
+          currentUserId: "user_1",
+        }),
+      ),
     ).rejects.toThrow("vision down");
 
-    await expect(state.listActivity("test-user")).resolves.toEqual([
+    await expect(state.listActivity("user_1")).resolves.toEqual([
       expect.objectContaining({
         level: "error",
         scope: "documents",

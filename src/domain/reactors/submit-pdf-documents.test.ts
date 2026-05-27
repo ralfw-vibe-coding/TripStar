@@ -3,6 +3,7 @@ import { LocalStateProvider } from "../providers/local/local-state-provider";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import { submitPdfDocuments } from "./submit-pdf-documents";
+import { withUserId } from "../providers/user-context";
 
 function createStorage(): DocumentStorageProvider {
   return {
@@ -97,15 +98,17 @@ describe("submitPdfDocuments", () => {
       },
     };
 
-    const result = await submitPdfDocuments(state, createStorage(), emptyAnalyzer, {
-      tripId: null,
-      currentUserId: "user_1",
-      documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "empty.pdf" }],
-    });
+    const result = await withUserId("user_1", () =>
+      submitPdfDocuments(state, createStorage(), emptyAnalyzer, {
+        tripId: null,
+        currentUserId: "user_1",
+        documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "empty.pdf" }],
+      }),
+    );
 
     expect(result.documents).toHaveLength(1);
     expect(result.bookings).toEqual([]);
-    await expect(state.listActivity("test-user")).resolves.toEqual([
+    await expect(state.listActivity("user_1")).resolves.toEqual([
       expect.objectContaining({
         scope: "documents",
         message: "PDF analyzed, no bookings extracted",
@@ -154,14 +157,16 @@ describe("submitPdfDocuments", () => {
       },
     };
 
-    const result = await submitPdfDocuments(state, createStorage(), duplicateAnalyzer, {
-      tripId: null,
-      currentUserId: "user_1",
-      documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "duplicate.pdf" }],
-    });
+    const result = await withUserId("user_1", () =>
+      submitPdfDocuments(state, createStorage(), duplicateAnalyzer, {
+        tripId: null,
+        currentUserId: "user_1",
+        documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "duplicate.pdf" }],
+      }),
+    );
 
     expect(result.bookings).toHaveLength(1);
-    await expect(state.listActivity("test-user")).resolves.toEqual([
+    await expect(state.listActivity("user_1")).resolves.toEqual([
       expect.objectContaining({
         message: "PDF analyzed, created 1 booking",
         details: expect.objectContaining({ bookingCount: 1, extractedBookingCount: 2 }),
@@ -206,17 +211,19 @@ describe("submitPdfDocuments", () => {
     };
 
     await expect(
-      submitPdfDocuments(state, createStorage(), failingAnalyzer, {
-        tripId: null,
-        currentUserId: "user_1",
-        documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "failed.pdf" }],
-      }),
+      withUserId("user_1", () =>
+        submitPdfDocuments(state, createStorage(), failingAnalyzer, {
+          tripId: null,
+          currentUserId: "user_1",
+          documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "failed.pdf" }],
+        }),
+      ),
     ).rejects.toThrow("pdf down");
 
     await expect(state.listDocuments()).resolves.toEqual([
       expect.objectContaining({ originalFileName: "failed.pdf", processingStatus: "failed" }),
     ]);
-    await expect(state.listActivity("test-user")).resolves.toEqual([
+    await expect(state.listActivity("user_1")).resolves.toEqual([
       expect.objectContaining({ level: "error", scope: "documents", message: "PDF analysis failed" }),
     ]);
   });

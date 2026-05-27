@@ -128,7 +128,7 @@ export interface TripStarStateProvider {
   appendActivity(entry: Omit<ActivityLogEntry, "id" | "timestamp" | "userId">): Promise<ActivityLogEntry>; // userId injected via AsyncLocalStorage
   listActivity(userId: string): Promise<ActivityLogEntry[]>;
 
-  getCalendarView(now?: Date): Promise<CalendarView>;
+  getCalendarView(userId: string, now?: Date): Promise<CalendarView>;
 
   findUserByEmail(email: string): Promise<User | null>;
   findDocumentByEmailMessageId(messageId: string): Promise<DocumentRecord | null>;

@@ -458,7 +458,7 @@ export class PostgresStateProvider implements TripStarStateProvider {
     await this.ready;
     const rows = await this.sql`
       select data from activity_log
-      where data->>'userId' = ${userId} or data->>'userId' is null
+      where data->>'userId' = ${userId}
       order by timestamp desc limit 200
     `;
     return rows.map((row) => row.data as ActivityLogEntry);
@@ -513,17 +513,32 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return rows.length;
   }
 
-  async getCalendarView(now: Date = this.now()): Promise<CalendarView> {
-    const trips = await this.listTrips();
+  async getCalendarView(userId: string, now: Date = this.now()): Promise<CalendarView> {
+    const allTrips = await this.listTrips();
     const users = await this.listUsers();
+
+    // Only trips the user owns or has been invited to
+    const trips = allTrips.filter(
+      (trip) => trip.ownerUserId === userId || trip.sharedWithUserIds.includes(userId),
+    );
+    const visibleTripIds = new Set(trips.map((t) => t.id));
     const tripById = new Map(trips.map((trip) => [trip.id, trip]));
-    const bookings = (await this.listBookings()).map<CalendarBooking>((booking) => {
-      const trip = booking.tripId ? tripById.get(booking.tripId) ?? null : null;
-      return {
-        ...booking,
-        trip: trip ? { id: trip.id, tripNumber: trip.tripNumber, title: trip.title, color: trip.color } : null,
-      };
-    });
+
+    // Bookings assigned to a visible trip, plus unassigned inbox bookings that belong to this user
+    const bookings = (await this.listBookings())
+      .filter(
+        (booking) =>
+          (booking.tripId !== null && visibleTripIds.has(booking.tripId)) ||
+          (booking.tripId === null && booking.participantUserIds.includes(userId)),
+      )
+      .map<CalendarBooking>((booking) => {
+        const trip = booking.tripId ? tripById.get(booking.tripId) ?? null : null;
+        return {
+          ...booking,
+          trip: trip ? { id: trip.id, tripNumber: trip.tripNumber, title: trip.title, color: trip.color } : null,
+        };
+      });
+
     return { generatedAt: isoDate(now), bookings, trips, users };
   }
 
