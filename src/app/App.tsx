@@ -926,6 +926,76 @@ function ActivityLogDialog({ analysisJobs, onClose }: { analysisJobs: AnalysisJo
   );
 }
 
+function MultiSelectDropdown({
+  options,
+  selected,
+  onChange,
+  allLabel,
+}: {
+  options: Array<{ value: string; label: string }>;
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  allLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: Event) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (value: string) => {
+    if (selected.includes(value)) {
+      onChange(selected.filter((v) => v !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  };
+
+  const buttonLabel =
+    selected.length === 0
+      ? allLabel
+      : selected.length === 1
+        ? (options.find((o) => o.value === selected[0])?.label ?? selected[0])
+        : `${selected.length} selected`;
+
+  return (
+    <div className="multiselect-dropdown" ref={containerRef}>
+      <button
+        type="button"
+        className="multiselect-btn"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="multiselect-btn-label">{buttonLabel}</span>
+        <span className="multiselect-chevron">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="multiselect-options" role="listbox">
+          {options.map((option) => (
+            <label key={option.value} className="multiselect-option">
+              <input
+                type="checkbox"
+                checked={selected.includes(option.value)}
+                onChange={() => toggle(option.value)}
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CalendarPanel({
   view,
   currentUser,
@@ -955,8 +1025,8 @@ function CalendarPanel({
   onOpenDocument: (documentId: string) => void;
   analysisJobs: AnalysisJob[];
 }) {
-  const [tripFilter, setTripFilter] = useState("all");
-  const [userFilter, setUserFilter] = useState("all");
+  const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<"today" | "10" | "30" | "all">("all");
 
   if (!view) {
@@ -966,7 +1036,13 @@ function CalendarPanel({
   const visibleTrips = visibleTripsForUser(view.trips, currentUser.id);
   const assignableTrips = visibleTrips.filter((trip) => trip.ownerUserId === currentUser.id);
   const filterUsers = calendarFilterUsers(view.users, visibleTrips, currentUser.id);
-  const filteredBookings = filterCalendarBookings(view.bookings, tripFilter, userFilter, dateFilter);
+  const filteredBookings = filterCalendarBookings(view.bookings, selectedTripIds, selectedUserIds, dateFilter);
+
+  const tripOptions = [
+    { value: "inbox", label: "Inbox" },
+    ...visibleTrips.map((trip) => ({ value: trip.id, label: `${trip.title} #${trip.tripNumber}` })),
+  ];
+  const userOptions = filterUsers.map((user) => ({ value: user.id, label: user.shortCode }));
   const bookingGroups = groupBookingsByDay(filteredBookings);
 
   return (
@@ -993,26 +1069,21 @@ function CalendarPanel({
       <section className="calendar-filters" aria-label="Calendar filters">
         <label>
           Trip
-          <select value={tripFilter} onChange={(event) => setTripFilter(event.target.value)}>
-            <option value="all">All trips and inbox</option>
-            <option value="inbox">Inbox only</option>
-            {visibleTrips.map((trip) => (
-              <option key={trip.id} value={trip.id}>
-                {trip.title} #{trip.tripNumber}
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            options={tripOptions}
+            selected={selectedTripIds}
+            onChange={setSelectedTripIds}
+            allLabel="All trips and inbox"
+          />
         </label>
         <label>
           User
-          <select value={userFilter} onChange={(event) => setUserFilter(event.target.value)}>
-            <option value="all">All related users</option>
-            {filterUsers.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.shortCode}
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            options={userOptions}
+            selected={selectedUserIds}
+            onChange={setSelectedUserIds}
+            allLabel="All related users"
+          />
         </label>
         <label>
           Dates
@@ -1499,15 +1570,25 @@ function nullableText(value: string): string | null {
 
 function filterCalendarBookings(
   bookings: CalendarBooking[],
-  tripFilter: string,
-  userFilter: string,
+  selectedTripIds: string[],
+  selectedUserIds: string[],
   dateFilter: "today" | "10" | "30" | "all",
 ): CalendarBooking[] {
   const from = startDateForCalendarFilter(dateFilter);
   return bookings.filter((booking) => {
-    if (tripFilter === "inbox" && booking.tripId !== null) return false;
-    if (tripFilter !== "all" && tripFilter !== "inbox" && booking.tripId !== tripFilter) return false;
-    if (userFilter !== "all" && !booking.participantUserIds.includes(userFilter)) return false;
+    // Trip filter: OR logic across selected values; empty = no restriction
+    if (selectedTripIds.length > 0) {
+      const inboxSelected = selectedTripIds.includes("inbox");
+      const tripMatch =
+        (inboxSelected && booking.tripId === null) ||
+        (booking.tripId !== null && selectedTripIds.includes(booking.tripId));
+      if (!tripMatch) return false;
+    }
+    // User filter: OR logic; empty = no restriction
+    if (selectedUserIds.length > 0) {
+      const userMatch = booking.participantUserIds.some((uid) => selectedUserIds.includes(uid));
+      if (!userMatch) return false;
+    }
     if (from && booking.startAt && new Date(booking.startAt) < from) return false;
     return true;
   });
