@@ -1,7 +1,9 @@
 import { OpenAIBookingAnalysisProvider } from "../domain/providers/openai/openai-booking-analysis-provider";
 import { LocalDocumentStorageProvider } from "../domain/providers/local/local-document-storage-provider";
 import { R2DocumentStorageProvider } from "../domain/providers/remote/r2-document-storage-provider";
+import { FrankfurterExchangeRateProvider } from "./frankfurter-exchange-rate-provider";
 import type { DocumentStorageProvider } from "../domain/providers/document-storage-provider";
+import type { ExchangeRateProvider } from "../domain/providers/exchange-rate-provider";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
@@ -11,6 +13,10 @@ export function createBookingAnalysisProvider(): OpenAIBookingAnalysisProvider {
     throw new Error("OPENAI_API_KEY is required for booking analysis.");
   }
   return new OpenAIBookingAnalysisProvider(apiKey, process.env.OPENAI_MODEL ?? "gpt-5.4-mini");
+}
+
+export function createExchangeRateProvider(): ExchangeRateProvider {
+  return new FrankfurterExchangeRateProvider();
 }
 
 export function createDocumentStorageProvider(): DocumentStorageProvider {

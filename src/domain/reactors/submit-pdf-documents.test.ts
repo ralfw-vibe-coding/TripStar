@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { LocalStateProvider } from "../providers/local/local-state-provider";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
+import type { ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import { submitPdfDocuments } from "./submit-pdf-documents";
 import { withUserId } from "../providers/user-context";
+
+const noopExchangeRates: ExchangeRateProvider = { async convert() { return null; } };
 
 function createStorage(): DocumentStorageProvider {
   return {
@@ -70,7 +73,7 @@ describe("submitPdfDocuments", () => {
       sharedWithUserIds: [],
     });
 
-    const result = await submitPdfDocuments(state, createStorage(), analyzer, {
+    const result = await submitPdfDocuments(state, createStorage(), analyzer, noopExchangeRates, {
       tripId: trip.id,
       currentUserId: "user_1",
       documents: [
@@ -105,7 +108,7 @@ describe("submitPdfDocuments", () => {
     };
 
     const result = await withUserId("user_1", () =>
-      submitPdfDocuments(state, createStorage(), emptyAnalyzer, {
+      submitPdfDocuments(state, createStorage(), emptyAnalyzer, noopExchangeRates, {
         tripId: null,
         currentUserId: "user_1",
         documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "empty.pdf" }],
@@ -167,7 +170,7 @@ describe("submitPdfDocuments", () => {
     };
 
     const result = await withUserId("user_1", () =>
-      submitPdfDocuments(state, createStorage(), duplicateAnalyzer, {
+      submitPdfDocuments(state, createStorage(), duplicateAnalyzer, noopExchangeRates, {
         tripId: null,
         currentUserId: "user_1",
         documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "duplicate.pdf" }],
@@ -186,18 +189,18 @@ describe("submitPdfDocuments", () => {
   it("rejects empty or non-PDF uploads", async () => {
     const state = new LocalStateProvider({ now: () => new Date("2026-05-26T09:00:00.000Z") });
 
-    await expect(submitPdfDocuments(state, createStorage(), analyzer, { tripId: null, currentUserId: "user_1", documents: [] })).rejects.toThrow(
+    await expect(submitPdfDocuments(state, createStorage(), analyzer, noopExchangeRates, { tripId: null, currentUserId: "user_1", documents: [] })).rejects.toThrow(
       "At least one PDF document is required.",
     );
     await expect(
-      submitPdfDocuments(state, createStorage(), analyzer, {
+      submitPdfDocuments(state, createStorage(), analyzer, noopExchangeRates, {
         tripId: null,
         currentUserId: "user_1",
         documents: [{ base64: Buffer.from("not pdf").toString("base64"), originalFileName: "booking.txt" }],
       }),
     ).rejects.toThrow("Only PDF documents are accepted.");
     await expect(
-      submitPdfDocuments(state, createStorage(), analyzer, {
+      submitPdfDocuments(state, createStorage(), analyzer, noopExchangeRates, {
         tripId: null,
         currentUserId: "user_1",
         documents: [{ base64: "", originalFileName: "booking.pdf" }],
@@ -221,7 +224,7 @@ describe("submitPdfDocuments", () => {
 
     await expect(
       withUserId("user_1", () =>
-        submitPdfDocuments(state, createStorage(), failingAnalyzer, {
+        submitPdfDocuments(state, createStorage(), failingAnalyzer, noopExchangeRates, {
           tripId: null,
           currentUserId: "user_1",
           documents: [{ base64: Buffer.from("%PDF").toString("base64"), originalFileName: "failed.pdf" }],

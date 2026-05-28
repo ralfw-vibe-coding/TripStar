@@ -1,6 +1,7 @@
 import type { Booking, DocumentRecord, Id } from "../model";
 import type { AnalyzedBookingInput, BookingAnalysisProvider, ReceiptInfo } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider, StoredDocument } from "../providers/document-storage-provider";
+import { autoConvertToEur, type ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
 
@@ -24,6 +25,7 @@ export async function submitPdfDocuments(
   state: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
+  exchangeRates: ExchangeRateProvider,
   input: SubmitPdfDocumentsInput,
 ): Promise<SubmitPdfDocumentsResult> {
   if (input.documents.length === 0) {
@@ -33,7 +35,7 @@ export async function submitPdfDocuments(
   const documents: DocumentRecord[] = [];
   const bookings: Booking[] = [];
   for (const upload of input.documents) {
-    const result = await submitSinglePdfDocument(state, storage, analyzer, upload, input.tripId, input.currentUserId);
+    const result = await submitSinglePdfDocument(state, storage, analyzer, exchangeRates, upload, input.tripId, input.currentUserId);
     documents.push(result.document);
     bookings.push(...result.bookings);
   }
@@ -44,6 +46,7 @@ async function submitSinglePdfDocument(
   state: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
+  exchangeRates: ExchangeRateProvider,
   upload: SubmitPdfDocumentInput,
   tripId: Id | null,
   currentUserId: Id,
@@ -67,9 +70,10 @@ async function submitSinglePdfDocument(
   }
 
   const { receiptInfo } = analysisResult;
+  const receiptAmountEur = await autoConvertToEur(receiptInfo.receiptAmount, receiptInfo.receiptCurrency, receiptInfo.receiptDate ?? null, exchangeRates);
   const extractedBookingCount = analysisResult.bookings.length;
   const dedupedBookings = deduplicateAnalyzedBookings(analysisResult.bookings);
-  const document = await createPdfDocument(state, stored, tripId, "ready", receiptInfo);
+  const document = await createPdfDocument(state, stored, tripId, "ready", receiptInfo, receiptAmountEur);
   const bookings = await state.createBookings(
     dedupedBookings.map((booking) => ({
       ...booking,
@@ -99,6 +103,7 @@ function createPdfDocument(
   tripId: Id | null,
   processingStatus: DocumentRecord["processingStatus"],
   receiptInfo?: ReceiptInfo,
+  receiptAmountEur?: number | null,
 ): Promise<DocumentRecord> {
   return state.createDocument({
     tripId,
@@ -111,6 +116,7 @@ function createPdfDocument(
     isReceipt: false, // only set to true by explicit user action in TripRep
     receiptAmount: receiptInfo?.receiptAmount ?? null,
     receiptCurrency: receiptInfo?.receiptCurrency ?? null,
+    receiptAmountEur: receiptAmountEur ?? null,
     receiptDate: receiptInfo?.receiptDate ?? null,
     receiptPurpose: receiptInfo?.receiptPurpose ?? null,
     receiptType: receiptInfo?.receiptType ?? null,

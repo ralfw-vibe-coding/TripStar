@@ -1,6 +1,7 @@
 import type { Booking, DocumentRecord, Id } from "../model";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
+import { autoConvertToEur, type ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
 
@@ -20,6 +21,7 @@ export async function submitImageDocument(
   state: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
+  exchangeRates: ExchangeRateProvider,
   input: SubmitImageDocumentInput,
 ): Promise<SubmitImageDocumentResult> {
   if (!input.base64.trim()) {
@@ -43,6 +45,7 @@ export async function submitImageDocument(
     throw error;
   }
   const { receiptInfo } = analysisResult;
+  const receiptAmountEur = await autoConvertToEur(receiptInfo.receiptAmount, receiptInfo.receiptCurrency, receiptInfo.receiptDate ?? null, exchangeRates);
   const dedupedBookings = deduplicateAnalyzedBookings(analysisResult.bookings);
   if (dedupedBookings.length === 0 && !receiptInfo.isReceipt) {
     await state.appendActivity({
@@ -71,6 +74,7 @@ export async function submitImageDocument(
     isReceipt: false, // only set to true by explicit user action in TripRep
     receiptAmount: receiptInfo.receiptAmount,
     receiptCurrency: receiptInfo.receiptCurrency,
+    receiptAmountEur,
     receiptDate: receiptInfo.receiptDate,
     receiptPurpose: receiptInfo.receiptPurpose,
     receiptType: receiptInfo.receiptType,

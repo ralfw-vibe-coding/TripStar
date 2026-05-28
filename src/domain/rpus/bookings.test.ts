@@ -55,6 +55,7 @@ const document: DocumentRecord = {
   extractedText: null,
   isReceipt: false,
   receiptAmount: null,
+  receiptAmountEur: null,
   receiptCurrency: null,
   receiptDate: null,
   receiptPurpose: null,

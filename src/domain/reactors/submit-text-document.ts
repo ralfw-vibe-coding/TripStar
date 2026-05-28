@@ -1,6 +1,7 @@
 import type { Booking, DocumentRecord, Id } from "../model";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
+import { autoConvertToEur, type ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
 
@@ -19,6 +20,7 @@ export async function submitTextDocument(
   state: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
+  exchangeRates: ExchangeRateProvider,
   input: SubmitTextDocumentInput,
 ): Promise<SubmitTextDocumentResult> {
   const text = input.text.trim();
@@ -40,6 +42,7 @@ export async function submitTextDocument(
     throw error;
   }
   const { receiptInfo } = analysisResult;
+  const receiptAmountEur = await autoConvertToEur(receiptInfo.receiptAmount, receiptInfo.receiptCurrency, receiptInfo.receiptDate ?? null, exchangeRates);
   const dedupedBookings = deduplicateAnalyzedBookings(analysisResult.bookings);
   if (dedupedBookings.length === 0 && !receiptInfo.isReceipt) {
     await state.appendActivity({
@@ -67,6 +70,7 @@ export async function submitTextDocument(
     isReceipt: false, // only set to true by explicit user action in TripRep
     receiptAmount: receiptInfo.receiptAmount,
     receiptCurrency: receiptInfo.receiptCurrency,
+    receiptAmountEur,
     receiptDate: receiptInfo.receiptDate,
     receiptPurpose: receiptInfo.receiptPurpose,
     receiptType: receiptInfo.receiptType,

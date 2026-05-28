@@ -1,6 +1,7 @@
 import type { AnalysisJob, Id } from "../model";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
+import type { ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import { getCurrentUserId, withUserId } from "../providers/user-context";
 import { submitImageDocument, type SubmitImageDocumentInput } from "./submit-image-document";
@@ -20,6 +21,7 @@ export async function submitAnalysisJob(
   state: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
+  exchangeRates: ExchangeRateProvider,
   input: SubmitAnalysisJobInput,
 ): Promise<SubmitAnalysisJobResult> {
   const job = await state.createAnalysisJob({
@@ -30,7 +32,7 @@ export async function submitAnalysisJob(
   });
   await appendAnalysisActivity(state, job, "queued", null, null);
 
-  queueAnalysisJob(() => processAnalysisJob(state, storage, analyzer, job.id, input));
+  queueAnalysisJob(() => processAnalysisJob(state, storage, analyzer, exchangeRates, job.id, input));
   return { job };
 }
 
@@ -38,6 +40,7 @@ export async function processAnalysisJob(
   state: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
+  exchangeRates: ExchangeRateProvider,
   jobId: Id,
   input: SubmitAnalysisJobInput,
 ): Promise<void> {
@@ -46,10 +49,10 @@ export async function processAnalysisJob(
   try {
     const result =
       input.sourceType === "text"
-        ? await submitTextDocument(state, storage, analyzer, input)
+        ? await submitTextDocument(state, storage, analyzer, exchangeRates, input)
         : input.sourceType === "screenshot"
-        ? await submitImageDocument(state, storage, analyzer, input)
-        : await submitPdfDocuments(state, storage, analyzer, input);
+        ? await submitImageDocument(state, storage, analyzer, exchangeRates, input)
+        : await submitPdfDocuments(state, storage, analyzer, exchangeRates, input);
 
     const doneJob = await state.updateAnalysisJob(jobId, {
       status: "done",

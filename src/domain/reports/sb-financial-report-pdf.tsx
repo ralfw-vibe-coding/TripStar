@@ -58,8 +58,9 @@ const S = StyleSheet.create({
   receiptRowAlt: { flexDirection: "row", paddingVertical: 0.5, backgroundColor: "#f5f5f5" },
   rDate:    { width: "10%", paddingRight: 3 },
   rPurpose: { flex: 1, paddingRight: 3 },
-  rAmount:  { width: "16%", textAlign: "right", paddingRight: 3 },
-  rCcy:     { width: "8%"  },
+  rAmount:  { width: "14%", textAlign: "right", paddingRight: 3 },
+  rCcy:     { width: "7%"  },
+  rEur:     { width: "16%", textAlign: "right", paddingRight: 2, color: "#555" },
   subTotal: { flexDirection: "row", justifyContent: "flex-end", marginTop: 2, paddingTop: 2, borderTop: "0.3pt solid #aaa" },
   subTotalLabel: { color: "#555", marginRight: 6 },
   subTotalValue: { width: 55, textAlign: "right", fontWeight: "bold" },
@@ -157,14 +158,21 @@ function DaysGrid({ days }: { days: DayEntry[] }) {
   );
 }
 
+function receiptEurValue(r: DocumentRecord): number {
+  if (!r.receiptCurrency || r.receiptCurrency === "EUR") return r.receiptAmount ?? 0;
+  return r.receiptAmountEur ?? 0;
+}
+
 function ReceiptsTable({ receipts, title, titleEn }: { receipts: DocumentRecord[]; title: string; titleEn: string }) {
   if (receipts.length === 0) return null;
 
-  const eurReceipts = receipts.filter((r) => (r.receiptCurrency ?? "EUR") === "EUR" && r.receiptAmount !== null);
-  const eurTotal    = eurReceipts.reduce((s, r) => s + (r.receiptAmount ?? 0), 0);
+  const hasNonEur = receipts.some((r) => r.receiptCurrency && r.receiptCurrency !== "EUR");
+  const eurTotal  = receipts
+    .filter((r) => r.receiptAmount !== null || r.receiptAmountEur !== null)
+    .reduce((s, r) => s + receiptEurValue(r), 0);
 
   const nonEur = receipts.filter((r) => r.receiptCurrency && r.receiptCurrency !== "EUR" && r.receiptAmount !== null);
-  // group non-EUR by currency
+  // group non-EUR by currency (original amounts, for reference subtotals)
   const byCcy = new Map<string, number>();
   for (const r of nonEur) {
     const ccy = r.receiptCurrency!;
@@ -182,15 +190,24 @@ function ReceiptsTable({ receipts, title, titleEn }: { receipts: DocumentRecord[
         <Text style={[S.receiptHeaderCell, S.rPurpose]}>Описание / Description</Text>
         <Text style={[S.receiptHeaderCell, S.rAmount]}>Сума / Amount</Text>
         <Text style={[S.receiptHeaderCell, S.rCcy]}>CCY</Text>
+        {hasNonEur && <Text style={[S.receiptHeaderCell, S.rEur]}>≈ EUR</Text>}
       </View>
-      {receipts.map((r, i) => (
-        <View key={r.id} style={i % 2 === 0 ? S.receiptRow : S.receiptRowAlt}>
-          <Text style={S.rDate}>{fmtDate(r.receiptDate)}</Text>
-          <Text style={S.rPurpose}>{r.receiptPurpose ?? r.originalFileName ?? "—"}</Text>
-          <Text style={S.rAmount}>{r.receiptAmount !== null ? fmt(r.receiptAmount) : "—"}</Text>
-          <Text style={S.rCcy}>{r.receiptCurrency ?? "EUR"}</Text>
-        </View>
-      ))}
+      {receipts.map((r, i) => {
+        const isNonEur = r.receiptCurrency && r.receiptCurrency !== "EUR";
+        return (
+          <View key={r.id} style={i % 2 === 0 ? S.receiptRow : S.receiptRowAlt}>
+            <Text style={S.rDate}>{fmtDate(r.receiptDate)}</Text>
+            <Text style={S.rPurpose}>{r.receiptPurpose ?? r.originalFileName ?? "—"}</Text>
+            <Text style={S.rAmount}>{r.receiptAmount !== null ? fmt(r.receiptAmount) : "—"}</Text>
+            <Text style={S.rCcy}>{r.receiptCurrency ?? "EUR"}</Text>
+            {hasNonEur && (
+              <Text style={S.rEur}>
+                {isNonEur && r.receiptAmountEur !== null ? `≈ ${fmt(r.receiptAmountEur)} €` : ""}
+              </Text>
+            )}
+          </View>
+        );
+      })}
       <View style={S.subTotal}>
         <Text style={S.subTotalLabel}>EUR сума / EUR total:</Text>
         <Text style={S.subTotalValue}>{fmt(eurTotal)} €</Text>
@@ -223,8 +240,8 @@ export function SbFinancialReportDocument({
   const reportOnly   = receipts.filter((r) => r.receiptType !== "reimbursable");
 
   const reimbursableEur = reimbursable
-    .filter((r) => (r.receiptCurrency ?? "EUR") === "EUR" && r.receiptAmount !== null)
-    .reduce((s, r) => s + r.receiptAmount!, 0);
+    .filter((r) => r.receiptAmount !== null || r.receiptAmountEur !== null)
+    .reduce((s, r) => s + receiptEurValue(r), 0);
 
   const grandTotal = dailyTotal + reimbursableEur;
 

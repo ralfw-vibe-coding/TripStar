@@ -48,6 +48,7 @@ export interface UpdateDocumentInput {
   isReceipt?: boolean;
   receiptAmount?: number | null;
   receiptCurrency?: string | null;
+  receiptAmountEur?: number | null;
   receiptDate?: string | null;
   receiptPurpose?: string | null;
   receiptType?: "reimbursable" | "report_only" | null;
@@ -65,6 +66,7 @@ export interface CreateDocumentInput {
   isReceipt?: boolean;
   receiptAmount?: number | null;
   receiptCurrency?: string | null;
+  receiptAmountEur?: number | null;
   receiptDate?: string | null;
   receiptPurpose?: string | null;
   receiptType?: DocumentRecord["receiptType"];

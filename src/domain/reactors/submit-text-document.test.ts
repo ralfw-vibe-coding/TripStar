@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { LocalStateProvider } from "../providers/local/local-state-provider";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
+import type { ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import { submitTextDocument } from "./submit-text-document";
 import { withUserId } from "../providers/user-context";
+
+const noopExchangeRates: ExchangeRateProvider = { async convert() { return null; } };
 
 function createStorage(): DocumentStorageProvider & { storedCount: number } {
   return {
@@ -73,7 +76,7 @@ describe("submitTextDocument", () => {
     });
     const storage = createStorage();
 
-    const result = await submitTextDocument(state, storage, analyzer, {
+    const result = await submitTextDocument(state, storage, analyzer, noopExchangeRates, {
       text: "Flight to Berlin",
       tripId: trip.id,
       currentUserId: "user_1",
@@ -110,7 +113,7 @@ describe("submitTextDocument", () => {
       },
     };
 
-    const result = await submitTextDocument(state, storage, emptyAnalyzer, {
+    const result = await submitTextDocument(state, storage, emptyAnalyzer, noopExchangeRates, {
       text: "Just a note without a reservation.",
       tripId: null,
       currentUserId: "user_1",
@@ -138,7 +141,7 @@ describe("submitTextDocument", () => {
 
     await expect(
       withUserId("user_1", () =>
-        submitTextDocument(state, createStorage(), failingAnalyzer, {
+        submitTextDocument(state, createStorage(), failingAnalyzer, noopExchangeRates, {
           text: "Flight to Berlin",
           tripId: null,
           currentUserId: "user_1",

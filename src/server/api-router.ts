@@ -1,7 +1,7 @@
 import { assignBookingToTrip, deleteBooking, updateBooking } from "../domain/rpus/bookings";
 import { getCurrentUser, requestLoginOtp, verifyLoginOtp } from "../domain/rpus/auth";
 import { getCalendar } from "../domain/rpus/calendar";
-import { listDocumentsForUser, updateDocument, uploadDocument, type UploadDocumentInput } from "../domain/rpus/documents";
+import { listDocumentsForUser, uploadDocument, type UploadDocumentInput } from "../domain/rpus/documents";
 import { createTrip, listTrips, updateTrip } from "../domain/rpus/trips";
 import { getStateProvider } from "../domain/provider-factory";
 import type { CreateTripInput, UpdateBookingInput, UpdateDocumentInput, UpdateTripInput } from "../domain/providers/state-provider";
@@ -14,7 +14,8 @@ import { withUserId } from "../domain/providers/user-context";
 import { sendOtpEmail } from "./email";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
 import { loadLocalEnv } from "./local-env";
-import { createBookingAnalysisProvider, createDocumentStorageProvider } from "./provider-factories";
+import { createBookingAnalysisProvider, createDocumentStorageProvider, createExchangeRateProvider } from "./provider-factories";
+import { updateReceipt } from "../domain/reactors/update-receipt";
 
 loadLocalEnv();
 
@@ -147,13 +148,14 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (request.method === "POST" && segments[0] === "documents" && segments.length === 2 && segments[1] === "trip-upload") {
       if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
       const body = await readJson<UploadDocumentInput>(request);
-      return jsonResponse(await uploadDocument(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), body), { status: 201 });
+      return jsonResponse(await uploadDocument(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), createExchangeRateProvider(), body), { status: 201 });
     }
 
     if (request.method === "PATCH" && segments[0] === "documents" && segments.length === 2
         && !["text", "image", "pdf"].includes(segments[1])) {
       if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
-      return jsonResponse(await updateDocument(provider, segments[1], await readJson<UpdateDocumentInput>(request)));
+      const docInput = await readJson<UpdateDocumentInput>(request);
+      return jsonResponse(await updateReceipt(provider, createExchangeRateProvider(), segments[1], docInput));
     }
 
     if (segments[0] === "documents" && segments.length === 2 && segments[1] === "text" && request.method === "POST") {
@@ -163,7 +165,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
       const body = await readJson<{ text: string; tripId: string | null }>(request);
       return jsonResponse(
-        await submitAnalysisJob(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
+        await submitAnalysisJob(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), createExchangeRateProvider(), {
           sourceType: "text",
           text: body.text,
           tripId: body.tripId,
@@ -200,7 +202,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
       const body = await readJson<{ base64: string; mimeType: string; tripId: string | null }>(request);
       return jsonResponse(
-        await submitAnalysisJob(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), {
+        await submitAnalysisJob(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), createExchangeRateProvider(), {
           sourceType: "screenshot",
           base64: body.base64,
           mimeType: body.mimeType,
@@ -222,9 +224,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
       const storage = createDocumentStorageProvider();
       const analyzer = createBookingAnalysisProvider();
+      const exchangeRates = createExchangeRateProvider();
       const jobs = await Promise.all(
         body.documents.map((document) =>
-          submitAnalysisJob(provider, storage, analyzer, {
+          submitAnalysisJob(provider, storage, analyzer, exchangeRates, {
             sourceType: "pdf",
             documents: [document],
             documentName: document.originalFileName,

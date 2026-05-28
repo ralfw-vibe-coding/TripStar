@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider, StoredDocument } from "../providers/document-storage-provider";
+import type { ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import { LocalStateProvider } from "../providers/local/local-state-provider";
 import { processAnalysisJob, submitAnalysisJob } from "./analysis-jobs";
+
+const noopExchangeRates: ExchangeRateProvider = { async convert() { return null; } };
 
 function createStorage(): DocumentStorageProvider {
   const stored: StoredDocument = {
@@ -63,7 +66,7 @@ describe("analysis jobs", () => {
     vi.useFakeTimers();
     const state = new LocalStateProvider();
 
-    const submitted = await submitAnalysisJob(state, createStorage(), analyzer, {
+    const submitted = await submitAnalysisJob(state, createStorage(), analyzer, noopExchangeRates, {
       sourceType: "text",
       text: "Shuttle to Sofia on 10 May",
       tripId: null,
@@ -99,7 +102,7 @@ describe("analysis jobs", () => {
       },
     };
 
-    await processAnalysisJob(state, createStorage(), failingAnalyzer, job.id, {
+    await processAnalysisJob(state, createStorage(), failingAnalyzer, noopExchangeRates, job.id, {
       sourceType: "text",
       text: "booking",
       tripId: null,
@@ -112,7 +115,7 @@ describe("analysis jobs", () => {
   it("uses compact document names for queued pdf batches", async () => {
     vi.useFakeTimers();
     const state = new LocalStateProvider();
-    const submitted = await submitAnalysisJob(state, createStorage(), analyzer, {
+    const submitted = await submitAnalysisJob(state, createStorage(), analyzer, noopExchangeRates, {
       sourceType: "pdf",
       documents: [
         { base64: "JVBERi0=", originalFileName: "one.pdf" },

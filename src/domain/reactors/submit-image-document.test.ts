@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { LocalStateProvider } from "../providers/local/local-state-provider";
 import type { BookingAnalysisProvider } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
+import type { ExchangeRateProvider } from "../providers/exchange-rate-provider";
 import { submitImageDocument } from "./submit-image-document";
 import { withUserId } from "../providers/user-context";
+
+const noopExchangeRates: ExchangeRateProvider = { async convert() { return null; } };
 
 function createStorage(): DocumentStorageProvider & { storedCount: number } {
   return {
@@ -65,7 +68,7 @@ describe("submitImageDocument", () => {
     const state = new LocalStateProvider({ now: () => new Date("2026-05-26T09:00:00.000Z") });
     const storage = createStorage();
 
-    const result = await submitImageDocument(state, storage, analyzer, {
+    const result = await submitImageDocument(state, storage, analyzer, noopExchangeRates, {
       base64: Buffer.from("image bytes").toString("base64"),
       mimeType: "image/png",
       tripId: null,
@@ -101,7 +104,7 @@ describe("submitImageDocument", () => {
       },
     };
 
-    const result = await submitImageDocument(state, storage, emptyAnalyzer, {
+    const result = await submitImageDocument(state, storage, emptyAnalyzer, noopExchangeRates, {
       base64: Buffer.from("image bytes").toString("base64"),
       mimeType: "image/png",
       tripId: null,
@@ -128,7 +131,7 @@ describe("submitImageDocument", () => {
 
     await expect(
       withUserId("user_1", () =>
-        submitImageDocument(state, createStorage(), failingAnalyzer, {
+        submitImageDocument(state, createStorage(), failingAnalyzer, noopExchangeRates, {
           base64: Buffer.from("image bytes").toString("base64"),
           mimeType: "image/png",
           tripId: null,

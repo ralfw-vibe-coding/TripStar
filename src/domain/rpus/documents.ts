@@ -3,6 +3,7 @@ import type { TripStarStateProvider, UpdateDocumentInput } from "../providers/st
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import type { BookingAnalysisProvider, ReceiptInfo } from "../providers/booking-analysis-provider";
 import { emptyReceiptInfo } from "../providers/booking-analysis-provider";
+import { autoConvertToEur, type ExchangeRateProvider } from "../providers/exchange-rate-provider";
 
 /**
  * Returns all documents visible to a user — either directly assigned to one of
@@ -61,6 +62,7 @@ export async function uploadDocument(
   provider: TripStarStateProvider,
   storage: DocumentStorageProvider,
   analyzer: BookingAnalysisProvider,
+  exchangeRates: ExchangeRateProvider,
   input: UploadDocumentInput,
 ): Promise<DocumentRecord> {
   const stored = await storage.storeBase64Document({
@@ -81,6 +83,13 @@ export async function uploadDocument(
     // Receipt detection failure is non-fatal — document is still stored
   }
 
+  const receiptAmountEur = await autoConvertToEur(
+    receiptInfo.receiptAmount,
+    receiptInfo.receiptCurrency,
+    receiptInfo.receiptDate ?? null,
+    exchangeRates,
+  );
+
   return provider.createDocument({
     tripId: input.tripId,
     storageKey: stored.storageKey,
@@ -92,6 +101,7 @@ export async function uploadDocument(
     isReceipt: false, // only set to true by explicit user action in TripRep
     receiptAmount: receiptInfo.receiptAmount,
     receiptCurrency: receiptInfo.receiptCurrency,
+    receiptAmountEur,
     receiptDate: receiptInfo.receiptDate,
     receiptPurpose: receiptInfo.receiptPurpose,
     receiptType: receiptInfo.receiptType,

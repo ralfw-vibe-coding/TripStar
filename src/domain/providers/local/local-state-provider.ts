@@ -391,6 +391,7 @@ export class LocalStateProvider implements TripStarStateProvider {
       isReceipt: input.isReceipt ?? false,
       receiptAmount: input.receiptAmount ?? null,
       receiptCurrency: input.receiptCurrency ?? null,
+      receiptAmountEur: input.receiptAmountEur ?? null,
       receiptDate: input.receiptDate ?? null,
       receiptPurpose: input.receiptPurpose ?? null,
       receiptType: input.receiptType ?? null,

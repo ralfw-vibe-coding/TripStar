@@ -2242,10 +2242,10 @@ function TripReport({
 
   const reimbursableTotal = receiptDocs
     .filter((d) => d.receiptType === "reimbursable")
-    .reduce((sum, d) => sum + (d.receiptAmount ?? 0), 0);
+    .reduce((sum, d) => sum + receiptEurValue(d), 0);
   const reportOnlyTotal = receiptDocs
     .filter((d) => d.receiptType === "report_only")
-    .reduce((sum, d) => sum + (d.receiptAmount ?? 0), 0);
+    .reduce((sum, d) => sum + receiptEurValue(d), 0);
   const grandTotal = allowancesTotal + reimbursableTotal;
 
   function handleDayClick(date: string, e: MouseEvent) {
@@ -2459,6 +2459,12 @@ function TripReport({
   );
 }
 
+/** Returns the EUR value of a receipt, using receiptAmountEur for non-EUR currencies. */
+function receiptEurValue(doc: DocumentRecord): number {
+  if (!doc.receiptCurrency || doc.receiptCurrency === "EUR") return doc.receiptAmount ?? 0;
+  return doc.receiptAmountEur ?? 0;
+}
+
 function documentLabel(doc: DocumentRecord): string {
   if (doc.originalFileName) return doc.originalFileName;
   if (doc.sourceType === "text_input") return "Text document";
@@ -2489,7 +2495,7 @@ function ZahlungsbelegRow({
 
   useEffect(() => {
     setDraft(draftFromDocument(document));
-  }, [document.receiptDate, document.receiptPurpose, document.receiptAmount, document.receiptCurrency, document.receiptType]);
+  }, [document.receiptDate, document.receiptPurpose, document.receiptAmount, document.receiptCurrency, document.receiptAmountEur, document.receiptType]);
 
   async function remove() {
     setIsSaving(true);
@@ -2508,11 +2514,19 @@ function ZahlungsbelegRow({
     setSaveError(null);
     try {
       const amount = draft.receiptAmount.trim() ? parseFloat(draft.receiptAmount) : null;
+      const eurAmount = draft.receiptAmountEur.trim() ? parseFloat(draft.receiptAmountEur) : null;
+      const currency = draft.receiptCurrency.trim() || null;
       await onUpdate(document.id, {
         receiptDate: draft.receiptDate || null,
         receiptPurpose: draft.receiptPurpose.trim() || null,
         receiptAmount: Number.isFinite(amount) ? amount : null,
-        receiptCurrency: draft.receiptCurrency.trim() || null,
+        receiptCurrency: currency,
+        // EUR or no currency → EUR amount equals the original amount
+        // Non-EUR with user-provided value → use it as override
+        // Non-EUR with empty field → send null to trigger server-side auto-conversion
+        receiptAmountEur: currency === "EUR" || currency === null
+          ? (Number.isFinite(amount) ? amount : null)
+          : (Number.isFinite(eurAmount) ? eurAmount : null),
         receiptType: draft.receiptType,
       });
       setIsExpanded(false);
@@ -2541,9 +2555,16 @@ function ZahlungsbelegRow({
             )}
           </span>
           <span className="receipt-col-amount">
-            {document.receiptAmount != null
-              ? `${document.receiptAmount.toFixed(2)} ${document.receiptCurrency ?? ""}`
-              : ""}
+            {document.receiptAmountEur != null ? (
+              <>
+                {document.receiptCurrency && document.receiptCurrency !== "EUR" && document.receiptAmount != null && (
+                  <span className="receipt-original-amount">{document.receiptAmount.toFixed(2)} {document.receiptCurrency} </span>
+                )}
+                {document.receiptAmountEur.toFixed(2)} €
+              </>
+            ) : document.receiptAmount != null ? (
+              <>{document.receiptAmount.toFixed(2)} {document.receiptCurrency === "EUR" || !document.receiptCurrency ? "€" : document.receiptCurrency}</>
+            ) : ""}
           </span>
         </div>
         <button
@@ -2568,13 +2589,29 @@ function ZahlungsbelegRow({
             <span>Purpose</span>
             <input type="text" placeholder="e.g. hotel booking" value={draft.receiptPurpose} onChange={(e) => setDraft({ ...draft, receiptPurpose: e.target.value })} />
           </label>
-          <label className="receipt-field">
-            <span>Amount</span>
-            <div className="receipt-amount-row">
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={draft.receiptAmount} onChange={(e) => setDraft({ ...draft, receiptAmount: e.target.value })} />
-              <input type="text" className="receipt-currency" maxLength={3} placeholder="EUR" value={draft.receiptCurrency} onChange={(e) => setDraft({ ...draft, receiptCurrency: e.target.value.toUpperCase() })} />
-            </div>
-          </label>
+          <div className="receipt-amount-group">
+            <label className="receipt-field">
+              <span>Amount</span>
+              <div className="receipt-amount-row">
+                <input type="number" min="0" step="0.01" placeholder="0.00" value={draft.receiptAmount} onChange={(e) => setDraft({ ...draft, receiptAmount: e.target.value })} />
+                <input type="text" className="receipt-currency" maxLength={3} placeholder="EUR" value={draft.receiptCurrency} onChange={(e) => setDraft({ ...draft, receiptCurrency: e.target.value.toUpperCase(), receiptAmountEur: "" })} />
+              </div>
+            </label>
+            {draft.receiptCurrency && draft.receiptCurrency !== "EUR" && (
+              <label className="receipt-field">
+                <span>EUR</span>
+                <div className="receipt-amount-row">
+                  <input
+                    type="number" min="0" step="0.01" placeholder="auto"
+                    value={draft.receiptAmountEur}
+                    onChange={(e) => setDraft({ ...draft, receiptAmountEur: e.target.value })}
+                  />
+                  <span className="receipt-currency-label">€</span>
+                </div>
+                <span className="receipt-field-hint">Leave empty to auto-convert</span>
+              </label>
+            )}
+          </div>
           <div className="receipt-field">
             <span>Type</span>
             <div className="receipt-type-toggle">
@@ -2642,9 +2679,16 @@ function BuchungsbelegRow({
             )}
           </span>
           <span className="receipt-col-amount">
-            {document.receiptAmount != null
-              ? `${document.receiptAmount.toFixed(2)} ${document.receiptCurrency ?? ""}`
-              : ""}
+            {document.receiptAmountEur != null ? (
+              <>
+                {document.receiptCurrency && document.receiptCurrency !== "EUR" && document.receiptAmount != null && (
+                  <span className="receipt-original-amount">{document.receiptAmount.toFixed(2)} {document.receiptCurrency} </span>
+                )}
+                {document.receiptAmountEur.toFixed(2)} €
+              </>
+            ) : document.receiptAmount != null ? (
+              <>{document.receiptAmount.toFixed(2)} {document.receiptCurrency === "EUR" || !document.receiptCurrency ? "€" : document.receiptCurrency}</>
+            ) : ""}
           </span>
         </div>
         {saveError && <span className="inline-error">{saveError}</span>}
@@ -2675,6 +2719,7 @@ interface ReceiptDraft {
   receiptPurpose: string;
   receiptAmount: string;
   receiptCurrency: string;
+  receiptAmountEur: string;
   receiptType: "reimbursable" | "report_only";
 }
 
@@ -2684,18 +2729,21 @@ function draftFromDocument(doc: DocumentRecord): ReceiptDraft {
     receiptPurpose: doc.receiptPurpose ?? "",
     receiptAmount: doc.receiptAmount?.toString() ?? "",
     receiptCurrency: doc.receiptCurrency ?? "EUR",
+    receiptAmountEur: doc.receiptAmountEur?.toFixed(2) ?? "",
     receiptType: doc.receiptType ?? "reimbursable",
   };
 }
 
 function isDraftDirty(draft: ReceiptDraft, doc: DocumentRecord): boolean {
   const amount = draft.receiptAmount.trim() ? parseFloat(draft.receiptAmount) : null;
+  const eurAmount = draft.receiptAmountEur.trim() ? parseFloat(draft.receiptAmountEur) : null;
   return (
     (draft.receiptDate || null) !== doc.receiptDate ||
     (draft.receiptPurpose.trim() || null) !== doc.receiptPurpose ||
     draft.receiptType !== (doc.receiptType ?? "reimbursable") ||
     draft.receiptCurrency !== (doc.receiptCurrency ?? "EUR") ||
-    (Number.isFinite(amount) ? amount : null) !== doc.receiptAmount
+    (Number.isFinite(amount) ? amount : null) !== doc.receiptAmount ||
+    (Number.isFinite(eurAmount) ? eurAmount : null) !== doc.receiptAmountEur
   );
 }
 

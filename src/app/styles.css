@@ -1598,6 +1598,30 @@ textarea:disabled {
   font-weight: 600;
 }
 
+.receipt-currency-label {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #555;
+  background: #f0f4f7;
+  border: 1px solid #c8d3da;
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+.receipt-field-hint {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.receipt-original-amount {
+  font-weight: normal;
+  color: #888;
+  margin-right: 4px;
+}
+
 .receipt-type-toggle {
   display: flex;
   border: 1px solid #c8d3da;
@@ -1642,7 +1666,7 @@ textarea:disabled {
 /* Wide: 5-column grid — columns align across all receipt rows */
 .receipt-col-info {
   display: grid;
-  grid-template-columns: minmax(80px, 1.5fr) 90px minmax(80px, 2fr) 106px 100px;
+  grid-template-columns: minmax(80px, 1.5fr) 90px minmax(80px, 2fr) 106px 140px;
   align-items: center;
   gap: 6px 8px;
   flex: 1;
@@ -1691,6 +1715,16 @@ textarea:disabled {
   color: #1a7a48;
   white-space: nowrap;
   text-align: right;
+}
+
+.receipt-amount-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.receipt-amount-group > .receipt-field {
+  flex: 1;
+  min-width: 180px;
 }
 
 .receipt-type-badge {

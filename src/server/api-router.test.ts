@@ -242,6 +242,7 @@ describe("API router", () => {
   });
 
   it("uploads a trip document via POST /api/documents/trip-upload", async () => {
+    // Uses real OpenAI + local storage — needs a generous timeout
     // A tiny 1x1 white PNG as base64
     const base64Png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg==";
     const response = await handleApiRequest(
@@ -267,5 +268,5 @@ describe("API router", () => {
       processingStatus: "ready",
       isReceipt: false,
     });
-  });
+  }, 15000);
 });
