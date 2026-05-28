@@ -110,6 +110,21 @@ export async function uploadDocument(
   });
 }
 
+/**
+ * Deletes a directly-uploaded document.
+ * Refuses if the document is already marked as a payment receipt.
+ */
+export async function deleteDirectDocument(
+  provider: TripStarStateProvider,
+  id: Id,
+): Promise<DocumentRecord> {
+  const documents = await provider.listDocuments();
+  const document = documents.find((d) => d.id === id);
+  if (!document) throw new Error(`Document ${id} not found.`);
+  if (document.isReceipt) throw new Error("Cannot delete a document that is marked as a payment receipt.");
+  return provider.deleteDocument(id);
+}
+
 export async function updateDocument(
   provider: TripStarStateProvider,
   id: Id,

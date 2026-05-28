@@ -1802,6 +1802,33 @@ textarea:disabled {
   background: #fee2e2;
 }
 
+/* Delete button for directly-uploaded booking documents */
+.receipt-delete-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #b91c1c;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.45;
+  transition: opacity 0.1s, background 0.1s, border-color 0.1s;
+}
+
+.receipt-delete-btn:hover,
+.receipt-delete-btn.confirm {
+  opacity: 1;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.receipt-delete-btn.confirm {
+  font-weight: 600;
+}
+
 /* Small open-document icon button in Buchungsbeleg row */
 .receipt-open-btn {
   flex-shrink: 0;

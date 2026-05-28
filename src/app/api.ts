@@ -80,6 +80,10 @@ export function deleteBooking(bookingId: string): Promise<{ booking: Booking; de
   });
 }
 
+export function deleteDocument(documentId: string): Promise<DocumentRecord> {
+  return requestJson<DocumentRecord>(`/api/documents/${documentId}`, { method: "DELETE" });
+}
+
 export function requestOtp(email: string): Promise<{ email: string; expiresAt: string; devOtp?: string }> {
   return requestJson("/api/auth/request-otp", {
     method: "POST",

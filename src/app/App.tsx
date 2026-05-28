@@ -39,6 +39,7 @@ import {
   clearAuthToken,
   createTrip,
   deleteBooking,
+  deleteDocument as deleteDocumentApi,
   fetchAnalysisJobs,
   fetchActivityLog,
   fetchCalendar,
@@ -388,6 +389,17 @@ export function App() {
     }
   }
 
+  async function handleDeleteDocument(docId: string) {
+    const previousDocuments = documents;
+    setDocuments((docs) => docs.filter((d) => d.id !== docId));
+    try {
+      await deleteDocumentApi(docId);
+    } catch (caught) {
+      setDocuments(previousDocuments);
+      setError(caught instanceof Error ? caught.message : "Document could not be deleted.");
+    }
+  }
+
   async function reloadCalendar() {
     const [calendar, jobs] = await Promise.all([fetchCalendar(), fetchAnalysisJobs()]);
     setView(calendar);
@@ -524,6 +536,7 @@ export function App() {
             isDocumentsLoading={isDocumentsLoading}
             onRefresh={reloadCalendar}
             onUpdateDocument={handleUpdateDocument}
+            onDeleteDocument={handleDeleteDocument}
             onOpenDocument={handleOpenDocument}
             onUploadDocument={handleUploadTripDocument}
           />
@@ -2075,6 +2088,7 @@ function ReportsPanel({
   isDocumentsLoading,
   onRefresh,
   onUpdateDocument,
+  onDeleteDocument,
   onOpenDocument,
   onUploadDocument,
 }: {
@@ -2084,6 +2098,7 @@ function ReportsPanel({
   isDocumentsLoading: boolean;
   onRefresh: () => void;
   onUpdateDocument: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+  onDeleteDocument: (docId: string) => Promise<void>;
   onOpenDocument: (documentId: string) => void;
   onUploadDocument: (tripId: string, input: { base64: string; originalFileName: string; mimeType: string }) => Promise<void>;
 }) {
@@ -2106,6 +2121,7 @@ function ReportsPanel({
             isDocumentsLoading={isDocumentsLoading}
             onRefresh={onRefresh}
             onUpdateDocument={onUpdateDocument}
+            onDeleteDocument={onDeleteDocument}
             onOpenDocument={onOpenDocument}
             onUploadDocument={onUploadDocument}
           />
@@ -2143,6 +2159,7 @@ function TripReport({
   isDocumentsLoading,
   onRefresh: _onRefresh,
   onUpdateDocument,
+  onDeleteDocument,
   onOpenDocument,
   onUploadDocument,
 }: {
@@ -2152,6 +2169,7 @@ function TripReport({
   isDocumentsLoading: boolean;
   onRefresh: () => void;
   onUpdateDocument: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+  onDeleteDocument: (docId: string) => Promise<void>;
   onOpenDocument: (documentId: string) => void;
   onUploadDocument: (tripId: string, input: { base64: string; originalFileName: string; mimeType: string }) => Promise<void>;
 }) {
@@ -2424,7 +2442,15 @@ function TripReport({
             <h3 className="receipt-section-title" style={{ marginTop: 16 }}>Booking documents</h3>
             <div className="receipt-list">
               {bookingLinkedDocs.map((doc) => (
-                <BuchungsbelegRow key={doc.id} document={doc} tripId={trip.id} onUpdate={onUpdateDocument} onOpenDocument={onOpenDocument} />
+                <BuchungsbelegRow
+                  key={doc.id}
+                  document={doc}
+                  tripId={trip.id}
+                  isDirectUpload={!tripBookingDocIds.has(doc.id)}
+                  onUpdate={onUpdateDocument}
+                  onDelete={onDeleteDocument}
+                  onOpenDocument={onOpenDocument}
+                />
               ))}
             </div>
           </>
@@ -2641,16 +2667,21 @@ function ZahlungsbelegRow({
 function BuchungsbelegRow({
   document,
   tripId,
+  isDirectUpload,
   onUpdate,
+  onDelete,
   onOpenDocument,
 }: {
   document: DocumentRecord;
   tripId: string;
+  isDirectUpload: boolean;
   onUpdate: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+  onDelete: (docId: string) => Promise<void>;
   onOpenDocument: (documentId: string) => void;
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function promote() {
     setIsSaving(true);
@@ -2661,6 +2692,22 @@ function BuchungsbelegRow({
       setSaveError(caught instanceof Error ? caught.message : "Failed to save.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onDelete(document.id);
+    } catch (caught) {
+      setSaveError(caught instanceof Error ? caught.message : "Failed to delete.");
+      setIsSaving(false);
+      setConfirmDelete(false);
     }
   }
 
@@ -2692,6 +2739,18 @@ function BuchungsbelegRow({
           </span>
         </div>
         {saveError && <span className="inline-error">{saveError}</span>}
+        {isDirectUpload && (
+          <button
+            type="button"
+            className={`receipt-delete-btn${confirmDelete ? " confirm" : ""}`}
+            onClick={handleDelete}
+            disabled={isSaving}
+            title={confirmDelete ? "Click again to confirm deletion" : "Delete document"}
+            onBlur={() => setConfirmDelete(false)}
+          >
+            {confirmDelete ? "Delete?" : <Trash2 size={13} />}
+          </button>
+        )}
         <button
           type="button"
           className="receipt-open-btn"

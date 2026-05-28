@@ -1,7 +1,7 @@
 import { assignBookingToTrip, deleteBooking, updateBooking } from "../domain/rpus/bookings";
 import { getCurrentUser, requestLoginOtp, verifyLoginOtp } from "../domain/rpus/auth";
 import { getCalendar } from "../domain/rpus/calendar";
-import { listDocumentsForUser, uploadDocument, type UploadDocumentInput } from "../domain/rpus/documents";
+import { deleteDirectDocument, listDocumentsForUser, uploadDocument, type UploadDocumentInput } from "../domain/rpus/documents";
 import { createTrip, listTrips, updateTrip } from "../domain/rpus/trips";
 import { getStateProvider } from "../domain/provider-factory";
 import type { CreateTripInput, UpdateBookingInput, UpdateDocumentInput, UpdateTripInput } from "../domain/providers/state-provider";
@@ -138,6 +138,12 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         const body = await readJson<{ tripId: string | null }>(request);
         return jsonResponse(await assignBookingToTrip(provider, segments[1], body.tripId));
       }
+    }
+
+    if (request.method === "DELETE" && segments[0] === "documents" && segments.length === 2
+        && !["text", "image", "pdf"].includes(segments[1])) {
+      if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      return jsonResponse(await deleteDirectDocument(provider, segments[1]));
     }
 
     if (request.method === "GET" && segments[0] === "documents" && segments.length === 1) {
