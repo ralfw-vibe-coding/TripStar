@@ -477,6 +477,8 @@ export function App() {
           <TripList
             title="Mine"
             trips={ownTrips}
+            users={view?.users ?? []}
+            currentUserId={currentUser.id}
             onEdit={(trip) => {
               setEditingTrip(trip);
               setIsTripDialogOpen(true);
@@ -485,6 +487,8 @@ export function App() {
           <TripList
             title="Shared"
             trips={sharedTrips}
+            users={view?.users ?? []}
+            currentUserId={currentUser.id}
             onEdit={(trip) => {
               setEditingTrip(trip);
               setIsTripDialogOpen(true);
@@ -671,7 +675,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-function TripList({ title, trips, onEdit }: { title: string; trips: Trip[]; onEdit: (trip: Trip) => void }) {
+function TripList({ title, trips, users, currentUserId, onEdit }: { title: string; trips: Trip[]; users: User[]; currentUserId: string; onEdit: (trip: Trip) => void }) {
+  const usersById = new Map(users.map((u) => [u.id, u]));
   return (
     <section className="trip-group">
       <h3>{title}</h3>
@@ -679,21 +684,25 @@ function TripList({ title, trips, onEdit }: { title: string; trips: Trip[]; onEd
         {trips.length === 0 ? (
           <p className="muted-small">No trips</p>
         ) : (
-          trips.map((trip) => (
-            <article className="trip-row" key={trip.id}>
-              <span className="trip-swatch" style={{ background: tripColor(trip) }} />
-              <span className="trip-row-main">
-                <strong>{trip.title}</strong>
-                {trip.title !== `#${trip.tripNumber}` && <span>#{trip.tripNumber}</span>}
-              </span>
-              <span className="trip-row-dates">
-                {shortDate(trip.startDate)}-{shortDate(trip.endDate)}
-              </span>
-              <button className="trip-edit-button" type="button" aria-label={`Edit ${trip.title}`} onClick={() => onEdit(trip)}>
-                <Pencil size={14} />
-              </button>
-            </article>
-          ))
+          trips.map((trip) => {
+            const owner = trip.ownerUserId !== currentUserId ? usersById.get(trip.ownerUserId) : null;
+            return (
+              <article className="trip-row" key={trip.id}>
+                <span className="trip-swatch" style={{ background: tripColor(trip) }} />
+                <span className="trip-row-main">
+                  <strong>{trip.title}</strong>
+                  {trip.title !== `#${trip.tripNumber}` && <span>#{trip.tripNumber}</span>}
+                  {owner && <span className="participant-chip">{owner.shortCode}</span>}
+                </span>
+                <span className="trip-row-dates">
+                  {shortDate(trip.startDate)}-{shortDate(trip.endDate)}
+                </span>
+                <button className="trip-edit-button" type="button" aria-label={`Edit ${trip.title}`} onClick={() => onEdit(trip)}>
+                  <Pencil size={14} />
+                </button>
+              </article>
+            );
+          })
         )}
       </div>
     </section>
