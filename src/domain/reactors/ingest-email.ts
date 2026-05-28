@@ -207,7 +207,7 @@ async function analyzeAndStorePart(
 ): Promise<{ document: DocumentRecord; bookings: AnalyzedBookingInput[] }> {
   if (p.document.mimeType === "text/plain") {
     const text = Buffer.from(p.document.data, "base64").toString("utf-8");
-    const bookings = await analyzer.analyzeText(text);
+    const { bookings, receiptInfo } = await analyzer.analyzeText(text);
     const stored = await storage.storeTextDocument({ text, originalFileName: `Email from ${sender}` });
     const document = await state.createDocument({
       tripId: null,
@@ -217,13 +217,19 @@ async function analyzeAndStorePart(
       sourceType: "email_text",
       sourceEmailIngestId: txId,
       extractedText: text,
+      isReceipt: receiptInfo.isReceipt,
+      receiptAmount: receiptInfo.receiptAmount,
+      receiptCurrency: receiptInfo.receiptCurrency,
+      receiptDate: receiptInfo.receiptDate,
+      receiptPurpose: receiptInfo.receiptPurpose,
+      receiptType: receiptInfo.receiptType,
       processingStatus: "ready",
     });
     return { document, bookings: deduplicateAnalyzedBookings(bookings) };
   }
 
   if (p.document.mimeType === "application/pdf") {
-    const bookings = await analyzer.analyzePdf({ base64: p.document.data, originalFileName: p.document.filename });
+    const { bookings, receiptInfo } = await analyzer.analyzePdf({ base64: p.document.data, originalFileName: p.document.filename });
     const stored = await storage.storePdfDocument({ base64: p.document.data, originalFileName: p.document.filename });
     const document = await state.createDocument({
       tripId: null,
@@ -233,6 +239,12 @@ async function analyzeAndStorePart(
       sourceType: "email_attachment",
       sourceEmailIngestId: txId,
       extractedText: null,
+      isReceipt: receiptInfo.isReceipt,
+      receiptAmount: receiptInfo.receiptAmount,
+      receiptCurrency: receiptInfo.receiptCurrency,
+      receiptDate: receiptInfo.receiptDate,
+      receiptPurpose: receiptInfo.receiptPurpose,
+      receiptType: receiptInfo.receiptType,
       processingStatus: "ready",
     });
     return { document, bookings: deduplicateAnalyzedBookings(bookings) };

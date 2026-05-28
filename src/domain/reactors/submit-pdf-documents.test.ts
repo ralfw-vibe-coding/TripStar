@@ -34,21 +34,24 @@ const analyzer: BookingAnalysisProvider = {
     throw new Error("not used");
   },
   async analyzePdf() {
-    return [
-      {
-        type: "train",
-        title: "Train to Hamburg",
-        startAt: "2026-07-01T09:00:00.000Z",
-        endAt: null,
-        fromText: "Berlin",
-        toText: "Hamburg",
-        travelers: [],
-        serviceIdentifier: "ICE 100",
-        operator: "DB",
-        details: "Train to Hamburg",
-        extractedJson: { test: true },
-      },
-    ];
+    return {
+      bookings: [
+        {
+          type: "train",
+          title: "Train to Hamburg",
+          startAt: "2026-07-01T09:00:00.000Z",
+          endAt: null,
+          fromText: "Berlin",
+          toText: "Hamburg",
+          travelers: [],
+          serviceIdentifier: "ICE 100",
+          operator: "DB",
+          details: "Train to Hamburg",
+          extractedJson: { test: true },
+        },
+      ],
+      receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null },
+    };
   },
 };
 
@@ -94,7 +97,7 @@ describe("submitPdfDocuments", () => {
         throw new Error("not used");
       },
       async analyzePdf() {
-        return [];
+        return { bookings: [], receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null } };
       },
     };
 
@@ -126,34 +129,37 @@ describe("submitPdfDocuments", () => {
         throw new Error("not used");
       },
       async analyzePdf() {
-        return [
-          {
-            type: "flight",
-            title: "DAD -> KTI",
-            startAt: "2026-04-13T19:30:00.000Z",
-            endAt: "2026-04-13T21:55:00.000Z",
-            fromText: "DAD · Da Nang",
-            toText: "KTI · Phnom Penh",
-            travelers: ["Ralf"],
-            serviceIdentifier: "K6843",
-            operator: "Cambodia Angkor Air",
-            details: "Ticket number: 123",
-            extractedJson: { page: 1 },
-          },
-          {
-            type: "flight",
-            title: "DAD -> KTI",
-            startAt: "2026-04-13T19:30:00.000Z",
-            endAt: "2026-04-13T21:55:00.000Z",
-            fromText: "DAD · Da Nang",
-            toText: "KTI · Phnom Penh",
-            travelers: ["Ralf"],
-            serviceIdentifier: "K6843",
-            operator: "Cambodia Angkor Air",
-            details: "Ticket number: 123",
-            extractedJson: { page: 2 },
-          },
-        ];
+        return {
+          bookings: [
+            {
+              type: "flight",
+              title: "DAD -> KTI",
+              startAt: "2026-04-13T19:30:00.000Z",
+              endAt: "2026-04-13T21:55:00.000Z",
+              fromText: "DAD · Da Nang",
+              toText: "KTI · Phnom Penh",
+              travelers: ["Ralf"],
+              serviceIdentifier: "K6843",
+              operator: "Cambodia Angkor Air",
+              details: "Ticket number: 123",
+              extractedJson: { page: 1 },
+            },
+            {
+              type: "flight",
+              title: "DAD -> KTI",
+              startAt: "2026-04-13T19:30:00.000Z",
+              endAt: "2026-04-13T21:55:00.000Z",
+              fromText: "DAD · Da Nang",
+              toText: "KTI · Phnom Penh",
+              travelers: ["Ralf"],
+              serviceIdentifier: "K6843",
+              operator: "Cambodia Angkor Air",
+              details: "Ticket number: 123",
+              extractedJson: { page: 2 },
+            },
+          ],
+          receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null },
+        };
       },
     };
 

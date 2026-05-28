@@ -1,5 +1,5 @@
 import type { Booking, DocumentRecord, Id } from "../model";
-import type { AnalyzedBookingInput, BookingAnalysisProvider } from "../providers/booking-analysis-provider";
+import type { AnalyzedBookingInput, BookingAnalysisProvider, ReceiptInfo } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider, StoredDocument } from "../providers/document-storage-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import { deduplicateAnalyzedBookings } from "./analyzed-bookings";
@@ -51,9 +51,9 @@ async function submitSinglePdfDocument(
   validatePdfUpload(upload);
   const stored = await storage.storePdfDocument(upload);
 
-  let analyzedBookings: AnalyzedBookingInput[] = [];
+  let analysisResult;
   try {
-    analyzedBookings = await analyzer.analyzePdf(upload);
+    analysisResult = await analyzer.analyzePdf(upload);
   } catch (error) {
     const failedDocument = await createPdfDocument(state, stored, tripId, "failed");
     await state.appendActivity({
@@ -66,11 +66,12 @@ async function submitSinglePdfDocument(
     throw error;
   }
 
-  const extractedBookingCount = analyzedBookings.length;
-  analyzedBookings = deduplicateAnalyzedBookings(analyzedBookings);
-  const document = await createPdfDocument(state, stored, tripId, "ready");
+  const { receiptInfo } = analysisResult;
+  const extractedBookingCount = analysisResult.bookings.length;
+  const dedupedBookings = deduplicateAnalyzedBookings(analysisResult.bookings);
+  const document = await createPdfDocument(state, stored, tripId, "ready", receiptInfo);
   const bookings = await state.createBookings(
-    analyzedBookings.map((booking) => ({
+    dedupedBookings.map((booking) => ({
       ...booking,
       tripId,
       sourceDocumentId: document.id,
@@ -97,6 +98,7 @@ function createPdfDocument(
   stored: StoredDocument,
   tripId: Id | null,
   processingStatus: DocumentRecord["processingStatus"],
+  receiptInfo?: ReceiptInfo,
 ): Promise<DocumentRecord> {
   return state.createDocument({
     tripId,
@@ -106,9 +108,12 @@ function createPdfDocument(
     sourceType: "upload",
     sourceEmailIngestId: null,
     extractedText: null,
-    isReceipt: false,
-    receiptAmount: null,
-    receiptCurrency: null,
+    isReceipt: receiptInfo?.isReceipt ?? false,
+    receiptAmount: receiptInfo?.receiptAmount ?? null,
+    receiptCurrency: receiptInfo?.receiptCurrency ?? null,
+    receiptDate: receiptInfo?.receiptDate ?? null,
+    receiptPurpose: receiptInfo?.receiptPurpose ?? null,
+    receiptType: receiptInfo?.receiptType ?? null,
     receiptJson: null,
     processingStatus,
   });

@@ -116,7 +116,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (request.method === "POST" && segments[0] === "documents" && segments.length === 2 && segments[1] === "trip-upload") {
       if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
       const body = await readJson<UploadDocumentInput>(request);
-      return jsonResponse(await uploadDocument(provider, createDocumentStorageProvider(), body), { status: 201 });
+      return jsonResponse(await uploadDocument(provider, createDocumentStorageProvider(), createBookingAnalysisProvider(), body), { status: 201 });
     }
 
     if (request.method === "PATCH" && segments[0] === "documents" && segments.length === 2

@@ -29,9 +29,9 @@ export async function submitImageDocument(
     throw new Error("Screenshot must be PNG, JPEG, or WebP.");
   }
 
-  let analyzedBookings;
+  let analysisResult;
   try {
-    analyzedBookings = await analyzer.analyzeImage({ base64: input.base64, mimeType: input.mimeType });
+    analysisResult = await analyzer.analyzeImage({ base64: input.base64, mimeType: input.mimeType });
   } catch (error) {
     await state.appendActivity({
       level: "error",
@@ -42,7 +42,9 @@ export async function submitImageDocument(
     });
     throw error;
   }
-  if (analyzedBookings.length === 0) {
+  const { receiptInfo } = analysisResult;
+  const dedupedBookings = deduplicateAnalyzedBookings(analysisResult.bookings);
+  if (dedupedBookings.length === 0 && !receiptInfo.isReceipt) {
     await state.appendActivity({
       level: "info",
       scope: "documents",
@@ -52,7 +54,6 @@ export async function submitImageDocument(
     });
     return { document: null, bookings: [] };
   }
-  analyzedBookings = deduplicateAnalyzedBookings(analyzedBookings);
 
   const stored = await storage.storeBase64Document({
     base64: input.base64,
@@ -67,14 +68,17 @@ export async function submitImageDocument(
     sourceType: "screenshot",
     sourceEmailIngestId: null,
     extractedText: null,
-    isReceipt: false,
-    receiptAmount: null,
-    receiptCurrency: null,
+    isReceipt: receiptInfo.isReceipt,
+    receiptAmount: receiptInfo.receiptAmount,
+    receiptCurrency: receiptInfo.receiptCurrency,
+    receiptDate: receiptInfo.receiptDate,
+    receiptPurpose: receiptInfo.receiptPurpose,
+    receiptType: receiptInfo.receiptType,
     receiptJson: null,
     processingStatus: "ready",
   });
   const bookings = await state.createBookings(
-    analyzedBookings.map((booking) => ({
+    dedupedBookings.map((booking) => ({
       ...booking,
       tripId: input.tripId,
       sourceDocumentId: document.id,

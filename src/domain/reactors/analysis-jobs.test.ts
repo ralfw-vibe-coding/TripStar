@@ -28,27 +28,30 @@ function createStorage(): DocumentStorageProvider {
 
 const analyzer: BookingAnalysisProvider = {
   async analyzeText() {
-    return [
-      {
-        type: "other",
-        title: "Shuttle",
-        startAt: "2026-05-10T08:00:00.000Z",
-        endAt: null,
-        fromText: null,
-        toText: "Sofia",
-        travelers: [],
-        serviceIdentifier: null,
-        operator: null,
-        details: "Airport shuttle",
-        extractedJson: null,
-      },
-    ];
+    return {
+      bookings: [
+        {
+          type: "other",
+          title: "Shuttle",
+          startAt: "2026-05-10T08:00:00.000Z",
+          endAt: null,
+          fromText: null,
+          toText: "Sofia",
+          travelers: [],
+          serviceIdentifier: null,
+          operator: null,
+          details: "Airport shuttle",
+          extractedJson: null,
+        },
+      ],
+      receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null },
+    };
   },
   async analyzeImage() {
-    return [];
+    return { bookings: [], receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null } };
   },
   async analyzePdf() {
-    return [];
+    return { bookings: [], receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null } };
   },
 };
 
@@ -86,10 +89,10 @@ describe("analysis jobs", () => {
         throw new Error("OpenAI unavailable");
       },
       async analyzeImage() {
-        return [];
+        return { bookings: [], receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null } };
       },
       async analyzePdf() {
-        return [];
+        return { bookings: [], receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null } };
       },
     };
 

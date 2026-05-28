@@ -57,6 +57,9 @@ export interface CreateDocumentInput {
   isReceipt?: boolean;
   receiptAmount?: number | null;
   receiptCurrency?: string | null;
+  receiptDate?: string | null;
+  receiptPurpose?: string | null;
+  receiptType?: DocumentRecord["receiptType"];
   receiptJson?: unknown | null;
   processingStatus: DocumentRecord["processingStatus"];
 }

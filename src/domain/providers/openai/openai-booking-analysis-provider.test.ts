@@ -68,11 +68,11 @@ describe("OpenAIBookingAnalysisProvider", () => {
     );
     const provider = new OpenAIBookingAnalysisProvider("sk-test", "gpt-test", () => new Date("2026-05-26T12:00:00.000Z"));
 
-    const bookings = await provider.analyzeText("Flug am 03.07. um 09:30");
+    const result = await provider.analyzeText("Flug am 03.07. um 09:30");
 
-    expect(bookings[0].startAt).toBe("2026-07-03T06:30:00.000Z");
-    expect(bookings[0].timePoints).toMatchObject([{ localDateTime: "2026-07-03T09:30", timeZone: "Europe/Sofia" }]);
-    expect(bookings[0].extractedJson).toMatchObject({
+    expect(result.bookings[0].startAt).toBe("2026-07-03T06:30:00.000Z");
+    expect(result.bookings[0].timePoints).toMatchObject([{ localDateTime: "2026-07-03T09:30", timeZone: "Europe/Sofia" }]);
+    expect(result.bookings[0].extractedJson).toMatchObject({
       provider: "openai",
       model: "gpt-test",
       extracted: { type: "flight", confidence: 0.8 },

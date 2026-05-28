@@ -1440,7 +1440,6 @@ textarea:disabled {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
 }
 
 .receipt-toggle {
@@ -1556,34 +1555,65 @@ textarea:disabled {
   margin-top: 4px;
 }
 
-/* Summary chips in Zahlungsbeleg header */
-.receipt-summary {
+/* Receipt header: info block + remove button */
+.receipt-row.is-receipt .receipt-row-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  flex: 1;
-  overflow: hidden;
-  font-size: 12px;
 }
 
-.receipt-summary-purpose {
+/* Wide: 5-column grid — columns align across all receipt rows */
+.receipt-col-info {
+  display: grid;
+  grid-template-columns: minmax(80px, 1.5fr) 90px minmax(80px, 2fr) 106px 100px;
+  align-items: center;
+  gap: 6px 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Narrow: stack vertically */
+@media (max-width: 600px) {
+  .receipt-col-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+}
+
+.receipt-col-name {
+  font-size: 13px;
+  font-weight: 500;
   color: #18212f;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.receipt-summary-date {
+.receipt-col-date {
+  font-size: 12px;
   color: #7a8a95;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.receipt-summary-amount {
+.receipt-col-purpose {
+  font-size: 12px;
+  color: #18212f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.receipt-col-badge {
+  display: flex;
+}
+
+.receipt-col-amount {
+  font-size: 12px;
   font-weight: 600;
   color: #1a7a48;
   white-space: nowrap;
-  flex-shrink: 0;
+  text-align: right;
 }
 
 .receipt-type-badge {

@@ -30,21 +30,24 @@ function createStorage(): DocumentStorageProvider & { storedCount: number } {
 
 const analyzer: BookingAnalysisProvider = {
   async analyzeText() {
-    return [
-      {
-        type: "flight",
-        title: "Flight to Berlin",
-        startAt: "2026-07-01T09:00:00.000Z",
-        endAt: null,
-        fromText: "Sofia",
-        toText: "Berlin",
-        travelers: [],
-        serviceIdentifier: "LH123",
-        operator: "Lufthansa",
-        details: "Flight to Berlin",
-        extractedJson: { test: true },
-      },
-    ];
+    return {
+      bookings: [
+        {
+          type: "flight",
+          title: "Flight to Berlin",
+          startAt: "2026-07-01T09:00:00.000Z",
+          endAt: null,
+          fromText: "Sofia",
+          toText: "Berlin",
+          travelers: [],
+          serviceIdentifier: "LH123",
+          operator: "Lufthansa",
+          details: "Flight to Berlin",
+          extractedJson: { test: true },
+        },
+      ],
+      receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null },
+    };
   },
   async analyzeImage() {
     throw new Error("not used");
@@ -94,7 +97,7 @@ describe("submitTextDocument", () => {
     const storage = createStorage();
     const emptyAnalyzer: BookingAnalysisProvider = {
       async analyzeText() {
-        return [];
+        return { bookings: [], receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null } };
       },
       async analyzeImage() {
         throw new Error("not used");

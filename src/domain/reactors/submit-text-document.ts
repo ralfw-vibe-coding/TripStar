@@ -26,9 +26,9 @@ export async function submitTextDocument(
     throw new Error("Document text is required.");
   }
 
-  let analyzedBookings;
+  let analysisResult;
   try {
-    analyzedBookings = await analyzer.analyzeText(text);
+    analysisResult = await analyzer.analyzeText(text);
   } catch (error) {
     await state.appendActivity({
       level: "error",
@@ -39,7 +39,9 @@ export async function submitTextDocument(
     });
     throw error;
   }
-  if (analyzedBookings.length === 0) {
+  const { receiptInfo } = analysisResult;
+  const dedupedBookings = deduplicateAnalyzedBookings(analysisResult.bookings);
+  if (dedupedBookings.length === 0 && !receiptInfo.isReceipt) {
     await state.appendActivity({
       level: "info",
       scope: "documents",
@@ -49,7 +51,6 @@ export async function submitTextDocument(
     });
     return { document: null, bookings: [] };
   }
-  analyzedBookings = deduplicateAnalyzedBookings(analyzedBookings);
 
   const stored = await storage.storeTextDocument({
     text,
@@ -63,14 +64,17 @@ export async function submitTextDocument(
     sourceType: "text_input",
     sourceEmailIngestId: null,
     extractedText: text,
-    isReceipt: false,
-    receiptAmount: null,
-    receiptCurrency: null,
+    isReceipt: receiptInfo.isReceipt,
+    receiptAmount: receiptInfo.receiptAmount,
+    receiptCurrency: receiptInfo.receiptCurrency,
+    receiptDate: receiptInfo.receiptDate,
+    receiptPurpose: receiptInfo.receiptPurpose,
+    receiptType: receiptInfo.receiptType,
     receiptJson: null,
     processingStatus: "ready",
   });
   const bookings = await state.createBookings(
-    analyzedBookings.map((booking) => ({
+    dedupedBookings.map((booking) => ({
       ...booking,
       tripId: input.tripId,
       sourceDocumentId: document.id,

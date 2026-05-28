@@ -1,4 +1,4 @@
-import type { Booking } from "../model";
+import type { Booking, DocumentRecord } from "../model";
 
 export interface AnalyzedBookingInput {
   type: Booking["type"];
@@ -15,8 +15,32 @@ export interface AnalyzedBookingInput {
   extractedJson: unknown | null;
 }
 
+/** Receipt fields extracted from a document by the analysis provider. */
+export interface ReceiptInfo {
+  isReceipt: boolean;
+  receiptAmount: number | null;
+  receiptCurrency: string | null;
+  receiptDate: string | null;
+  receiptPurpose: string | null;
+  receiptType: DocumentRecord["receiptType"];
+}
+
+export const emptyReceiptInfo: ReceiptInfo = {
+  isReceipt: false,
+  receiptAmount: null,
+  receiptCurrency: null,
+  receiptDate: null,
+  receiptPurpose: null,
+  receiptType: null,
+};
+
+export interface BookingAnalysisResult {
+  bookings: AnalyzedBookingInput[];
+  receiptInfo: ReceiptInfo;
+}
+
 export interface BookingAnalysisProvider {
-  analyzeText(text: string): Promise<AnalyzedBookingInput[]>;
-  analyzeImage(input: { base64: string; mimeType: string }): Promise<AnalyzedBookingInput[]>;
-  analyzePdf(input: { base64: string; originalFileName: string }): Promise<AnalyzedBookingInput[]>;
+  analyzeText(text: string): Promise<BookingAnalysisResult>;
+  analyzeImage(input: { base64: string; mimeType: string }): Promise<BookingAnalysisResult>;
+  analyzePdf(input: { base64: string; originalFileName: string }): Promise<BookingAnalysisResult>;
 }

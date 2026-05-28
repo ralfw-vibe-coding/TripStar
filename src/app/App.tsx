@@ -495,7 +495,7 @@ export function App() {
           />
         ) : (
           <ReportsPanel
-            trips={view?.trips ?? []}
+            trips={ownTrips}
             documents={documents}
             isDocumentsLoading={isDocumentsLoading}
             onRefresh={reloadCalendar}
@@ -2320,21 +2320,23 @@ function ZahlungsbelegRow({
     <div className="receipt-row is-receipt">
       {/* Summary row — always visible */}
       <div className="receipt-row-header" onClick={() => setIsExpanded((e) => !e)} style={{ cursor: "pointer" }}>
-        <span className="receipt-filename">{documentLabel(document)}</span>
-        <span className="receipt-summary">
-          {document.receiptPurpose && <span className="receipt-summary-purpose">{document.receiptPurpose}</span>}
-          {document.receiptDate && <span className="receipt-summary-date">{document.receiptDate}</span>}
-          {document.receiptAmount != null && (
-            <span className="receipt-summary-amount">
-              {document.receiptAmount.toFixed(2)} {document.receiptCurrency ?? ""}
-            </span>
-          )}
-          {document.receiptType && (
-            <span className={`receipt-type-badge ${document.receiptType}`}>
-              {document.receiptType === "reimbursable" ? "Reimbursable" : "Report only"}
-            </span>
-          )}
-        </span>
+        <div className="receipt-col-info">
+          <span className="receipt-col-name">{documentLabel(document)}</span>
+          <span className="receipt-col-date">{document.receiptDate ?? ""}</span>
+          <span className="receipt-col-purpose">{document.receiptPurpose ?? ""}</span>
+          <span className="receipt-col-badge">
+            {document.receiptType && (
+              <span className={`receipt-type-badge ${document.receiptType}`}>
+                {document.receiptType === "reimbursable" ? "Reimbursable" : "Report only"}
+              </span>
+            )}
+          </span>
+          <span className="receipt-col-amount">
+            {document.receiptAmount != null
+              ? `${document.receiptAmount.toFixed(2)} ${document.receiptCurrency ?? ""}`
+              : ""}
+          </span>
+        </div>
         <button
           type="button"
           className="receipt-remove-btn"

@@ -33,21 +33,24 @@ const analyzer: BookingAnalysisProvider = {
     throw new Error("not used");
   },
   async analyzeImage() {
-    return [
-      {
-        type: "lodging",
-        title: "Hotel Berlin",
-        startAt: "2026-07-01T15:00:00.000Z",
-        endAt: "2026-07-02T10:00:00.000Z",
-        fromText: null,
-        toText: "Berlin",
-        travelers: [],
-        serviceIdentifier: null,
-        operator: "Hotel",
-        details: "Hotel Berlin",
-        extractedJson: { test: true },
-      },
-    ];
+    return {
+      bookings: [
+        {
+          type: "lodging",
+          title: "Hotel Berlin",
+          startAt: "2026-07-01T15:00:00.000Z",
+          endAt: "2026-07-02T10:00:00.000Z",
+          fromText: null,
+          toText: "Berlin",
+          travelers: [],
+          serviceIdentifier: null,
+          operator: "Hotel",
+          details: "Hotel Berlin",
+          extractedJson: { test: true },
+        },
+      ],
+      receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null },
+    };
   },
   async analyzePdf() {
     throw new Error("not used");
@@ -88,7 +91,7 @@ describe("submitImageDocument", () => {
         throw new Error("not used");
       },
       async analyzeImage() {
-        return [];
+        return { bookings: [], receiptInfo: { isReceipt: false, receiptAmount: null, receiptCurrency: null, receiptDate: null, receiptPurpose: null, receiptType: null } };
       },
       async analyzePdf() {
         throw new Error("not used");

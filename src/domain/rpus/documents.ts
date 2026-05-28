@@ -1,6 +1,8 @@
 import type { DocumentRecord, Id } from "../model";
 import type { TripStarStateProvider, UpdateDocumentInput } from "../providers/state-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
+import type { BookingAnalysisProvider, ReceiptInfo } from "../providers/booking-analysis-provider";
+import { emptyReceiptInfo } from "../providers/booking-analysis-provider";
 
 /**
  * Returns all documents visible to a user — either directly assigned to one of
@@ -52,12 +54,13 @@ export interface UploadDocumentInput {
 }
 
 /**
- * Stores a file and creates a DocumentRecord assigned to the given trip —
- * no booking analysis, just storage. The document is immediately ready.
+ * Stores a file and creates a DocumentRecord assigned to the given trip.
+ * Runs receipt detection via the analyzer so payment receipts are auto-classified.
  */
 export async function uploadDocument(
   provider: TripStarStateProvider,
   storage: DocumentStorageProvider,
+  analyzer: BookingAnalysisProvider,
   input: UploadDocumentInput,
 ): Promise<DocumentRecord> {
   const stored = await storage.storeBase64Document({
@@ -65,6 +68,19 @@ export async function uploadDocument(
     mimeType: input.mimeType,
     originalFileName: input.originalFileName,
   });
+
+  // Run receipt detection in the background of the upload — ignore booking
+  // extraction results, we only want the receipt fields.
+  let receiptInfo: ReceiptInfo = emptyReceiptInfo;
+  try {
+    const result = input.mimeType === "application/pdf"
+      ? await analyzer.analyzePdf({ base64: input.base64, originalFileName: input.originalFileName })
+      : await analyzer.analyzeImage({ base64: input.base64, mimeType: input.mimeType });
+    receiptInfo = result.receiptInfo;
+  } catch {
+    // Receipt detection failure is non-fatal — document is still stored
+  }
+
   return provider.createDocument({
     tripId: input.tripId,
     storageKey: stored.storageKey,
@@ -73,9 +89,12 @@ export async function uploadDocument(
     sourceType: "upload",
     sourceEmailIngestId: null,
     extractedText: null,
-    isReceipt: false,
-    receiptAmount: null,
-    receiptCurrency: null,
+    isReceipt: receiptInfo.isReceipt,
+    receiptAmount: receiptInfo.receiptAmount,
+    receiptCurrency: receiptInfo.receiptCurrency,
+    receiptDate: receiptInfo.receiptDate,
+    receiptPurpose: receiptInfo.receiptPurpose,
+    receiptType: receiptInfo.receiptType,
     receiptJson: null,
     processingStatus: "ready",
   });
