@@ -36,6 +36,16 @@ export interface UpdateBookingInput {
   details?: string;
 }
 
+export interface UpdateDocumentInput {
+  isReceipt?: boolean;
+  receiptAmount?: number | null;
+  receiptCurrency?: string | null;
+  receiptDate?: string | null;
+  receiptPurpose?: string | null;
+  receiptType?: "reimbursable" | "report_only" | null;
+  tripId?: Id | null;
+}
+
 export interface CreateDocumentInput {
   tripId: Id | null;
   storageKey: string | null;
@@ -119,6 +129,7 @@ export interface TripStarStateProvider {
 
   listDocuments(): Promise<DocumentRecord[]>;
   createDocument(input: CreateDocumentInput): Promise<DocumentRecord>;
+  updateDocument(id: Id, input: UpdateDocumentInput): Promise<DocumentRecord>;
   assignDocumentToTrip(documentId: Id, tripId: Id | null): Promise<DocumentRecord>;
   deleteDocument(id: Id): Promise<DocumentRecord>;
 

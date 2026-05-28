@@ -105,6 +105,9 @@ export interface DocumentRecord {
   isReceipt: boolean;
   receiptAmount: number | null;
   receiptCurrency: string | null;
+  receiptDate: string | null;
+  receiptPurpose: string | null;
+  receiptType: "reimbursable" | "report_only" | null;
   receiptJson: unknown | null;
   processingStatus: ProcessingStatus;
   createdAt: string;

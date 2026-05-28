@@ -3,7 +3,7 @@ import { getCurrentUser, requestLoginOtp, verifyLoginOtp } from "../domain/rpus/
 import { getCalendar } from "../domain/rpus/calendar";
 import { createTrip, listTrips, updateTrip } from "../domain/rpus/trips";
 import { getStateProvider } from "../domain/provider-factory";
-import type { CreateTripInput, UpdateBookingInput, UpdateTripInput } from "../domain/providers/state-provider";
+import type { CreateTripInput, UpdateBookingInput, UpdateDocumentInput, UpdateTripInput } from "../domain/providers/state-provider";
 import type { IngestPart } from "../domain/model";
 import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
 import { receiveIngestPart, queueIngestProcessing } from "../domain/reactors/ingest-email";
@@ -103,6 +103,46 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         const body = await readJson<{ tripId: string | null }>(request);
         return jsonResponse(await assignBookingToTrip(provider, segments[1], body.tripId));
       }
+    }
+
+    if (request.method === "GET" && segments[0] === "documents" && segments.length === 1) {
+      if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      const [allTrips, allBookings, allDocs] = await Promise.all([
+        provider.listTrips(),
+        provider.listBookings(),
+        provider.listDocuments(),
+      ]);
+      const visibleTripIds = new Set(
+        allTrips
+          .filter((trip) => trip.ownerUserId === currentUserId || trip.sharedWithUserIds.includes(currentUserId))
+          .map((trip) => trip.id),
+      );
+      // Build a map: documentId → tripId inferred from bookings in visible trips
+      const tripIdByDocId = new Map<string, string>();
+      for (const booking of allBookings) {
+        if (booking.tripId !== null && visibleTripIds.has(booking.tripId) && booking.sourceDocumentId !== null) {
+          tripIdByDocId.set(booking.sourceDocumentId, booking.tripId);
+        }
+      }
+      return jsonResponse(
+        allDocs
+          .filter(
+            (doc) =>
+              (doc.tripId !== null && visibleTripIds.has(doc.tripId)) ||
+              tripIdByDocId.has(doc.id),
+          )
+          .map((doc) => ({
+            ...doc,
+            // Fill in tripId from the booking relationship when the document itself has none
+            tripId: doc.tripId ?? tripIdByDocId.get(doc.id) ?? null,
+          })),
+      );
+    }
+
+    if (request.method === "PATCH" && segments[0] === "documents" && segments.length === 2
+        && !["text", "image", "pdf"].includes(segments[1])) {
+      if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+      return jsonResponse(await provider.updateDocument(segments[1], await readJson<UpdateDocumentInput>(request)));
     }
 
     if (segments[0] === "documents" && segments.length === 2 && segments[1] === "text" && request.method === "POST") {

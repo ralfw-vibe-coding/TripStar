@@ -22,6 +22,7 @@ import type {
   TripStarStateProvider,
   UpdateAnalysisJobInput,
   UpdateBookingInput,
+  UpdateDocumentInput,
   UpdateTripInput,
   UpdateUserProfileInput,
   VerifyOtpResult,
@@ -354,6 +355,9 @@ export class PostgresStateProvider implements TripStarStateProvider {
       isReceipt: input.isReceipt ?? false,
       receiptAmount: input.receiptAmount ?? null,
       receiptCurrency: input.receiptCurrency ?? null,
+      receiptDate: null,
+      receiptPurpose: null,
+      receiptType: null,
       receiptJson: input.receiptJson ?? null,
       processingStatus: input.processingStatus,
       createdAt: timestamp,
@@ -365,6 +369,14 @@ export class PostgresStateProvider implements TripStarStateProvider {
       values (${document.id}, ${document.tripId}, ${document.storageKey}, ${document.createdAt}, null, ${toJson(document)})
     `;
     return clone(document);
+  }
+
+  async updateDocument(id: Id, input: UpdateDocumentInput): Promise<DocumentRecord> {
+    await this.ready;
+    const document = await this.requireDocument(id);
+    const updated: DocumentRecord = { ...document, ...input, updatedAt: this.nowIso() };
+    await this.sql`update documents set trip_id = ${updated.tripId}, data = ${toJson(updated)} where id = ${id}`;
+    return clone(updated);
   }
 
   async assignDocumentToTrip(documentId: Id, tripId: Id | null): Promise<DocumentRecord> {

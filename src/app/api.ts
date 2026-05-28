@@ -1,5 +1,5 @@
-import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, Trip, User } from "../domain/model";
-import type { CreateTripInput, UpdateTripInput } from "../domain/providers/state-provider";
+import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Trip, User } from "../domain/model";
+import type { CreateTripInput, UpdateDocumentInput, UpdateTripInput } from "../domain/providers/state-provider";
 
 const authTokenStorageKey = "tripstar.authToken";
 
@@ -135,6 +135,17 @@ export function submitPdfDocuments(input: {
 }> {
   return requestJson("/api/documents/pdf", {
     method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function fetchDocuments(): Promise<DocumentRecord[]> {
+  return requestJson<DocumentRecord[]>("/api/documents");
+}
+
+export function updateDocument(documentId: string, input: UpdateDocumentInput): Promise<DocumentRecord> {
+  return requestJson<DocumentRecord>(`/api/documents/${documentId}`, {
+    method: "PATCH",
     body: JSON.stringify(input),
   });
 }

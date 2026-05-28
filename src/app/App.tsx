@@ -31,7 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ActivityLogEntry, AnalysisJob, CalendarBooking, CalendarView, DailyAllowance, Trip, User } from "../domain/model";
+import type { ActivityLogEntry, AnalysisJob, CalendarBooking, CalendarView, DailyAllowance, DocumentRecord, Trip, User } from "../domain/model";
 import { DAILY_ALLOWANCES, type CountryAllowance } from "./daily-allowances-data";
 import {
   assignBookingTrip,
@@ -43,6 +43,7 @@ import {
   fetchCalendar,
   fetchCurrentUser,
   fetchDocumentOriginal,
+  fetchDocuments,
   getStoredAuthToken,
   logout,
   requestOtp,
@@ -51,6 +52,7 @@ import {
   submitPdfDocuments,
   submitTextDocument,
   updateBooking,
+  updateDocument as updateDocumentApi,
   updateProfile,
   updateTrip,
   verifyOtp,
@@ -78,6 +80,8 @@ export function App() {
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [pendingDeleteBookingId, setPendingDeleteBookingId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<"calendar" | "reports">("calendar");
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [isDocumentsLoading, setIsDocumentsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isTripDialogOpen, setIsTripDialogOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
@@ -111,6 +115,15 @@ export function App() {
     }, 1500);
     return () => window.clearInterval(timer);
   }, [currentUser?.id, analysisJobs]);
+
+  useEffect(() => {
+    if (activeSection !== "reports" || !currentUser) return;
+    setIsDocumentsLoading(true);
+    void fetchDocuments()
+      .then(setDocuments)
+      .catch((caught: Error) => setError(caught.message))
+      .finally(() => setIsDocumentsLoading(false));
+  }, [activeSection, currentUser?.id]);
 
   useEffect(() => {
     if (!pendingDeleteBookingId) return;
@@ -332,6 +345,18 @@ export function App() {
     setView((current) => (current ? { ...current, users: current.users.map((candidate) => (candidate.id === user.id ? user : candidate)) } : current));
   }
 
+  async function handleUpdateDocument(docId: string, input: Partial<DocumentRecord>) {
+    const previousDocuments = documents;
+    setDocuments((docs) => docs.map((d) => d.id === docId ? { ...d, ...input } : d));
+    try {
+      const updated = await updateDocumentApi(docId, input);
+      setDocuments((docs) => docs.map((d) => d.id === docId ? updated : d));
+    } catch (caught) {
+      setDocuments(previousDocuments);
+      throw caught;
+    }
+  }
+
   async function reloadCalendar() {
     const [calendar, jobs] = await Promise.all([fetchCalendar(), fetchAnalysisJobs()]);
     setView(calendar);
@@ -457,7 +482,13 @@ export function App() {
             analysisJobs={analysisJobs}
           />
         ) : (
-          <ReportsPanel trips={view?.trips ?? []} onRefresh={reloadCalendar} />
+          <ReportsPanel
+            trips={view?.trips ?? []}
+            documents={documents}
+            isDocumentsLoading={isDocumentsLoading}
+            onRefresh={reloadCalendar}
+            onUpdateDocument={handleUpdateDocument}
+          />
         )}
       </section>
 
@@ -1867,19 +1898,38 @@ function TripDialog({
 
 // ─── Reports Panel ───────────────────────────────────────────────────────────
 
-function ReportsPanel({ trips, onRefresh }: { trips: Trip[]; onRefresh: () => void }) {
+function ReportsPanel({
+  trips,
+  documents,
+  isDocumentsLoading,
+  onRefresh,
+  onUpdateDocument,
+}: {
+  trips: Trip[];
+  documents: DocumentRecord[];
+  isDocumentsLoading: boolean;
+  onRefresh: () => void;
+  onUpdateDocument: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+}) {
   return (
     <section className="reports">
       <header className="section-header">
         <div>
           <h2>Reports</h2>
-          <p>Daily allowances per trip</p>
+          <p>Daily allowances and receipts per trip</p>
         </div>
       </header>
       <div className="report-list">
         {trips.length === 0 && <p className="report-empty">No trips yet.</p>}
         {trips.map((trip) => (
-          <TripReport key={trip.id} trip={trip} onRefresh={onRefresh} />
+          <TripReport
+            key={trip.id}
+            trip={trip}
+            documents={documents.filter((d) => d.tripId === trip.id)}
+            isDocumentsLoading={isDocumentsLoading}
+            onRefresh={onRefresh}
+            onUpdateDocument={onUpdateDocument}
+          />
         ))}
       </div>
     </section>
@@ -1907,7 +1957,19 @@ function formatDayLabel(dateStr: string): string {
   return `${day}.${month}.`;
 }
 
-function TripReport({ trip, onRefresh: _onRefresh }: { trip: Trip; onRefresh: () => void }) {
+function TripReport({
+  trip,
+  documents,
+  isDocumentsLoading,
+  onRefresh: _onRefresh,
+  onUpdateDocument,
+}: {
+  trip: Trip;
+  documents: DocumentRecord[];
+  isDocumentsLoading: boolean;
+  onRefresh: () => void;
+  onUpdateDocument: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+}) {
   const days = tripDays(trip);
 
   // Local copy for optimistic updates — synced from props when server data arrives
@@ -1924,7 +1986,7 @@ function TripReport({ trip, onRefresh: _onRefresh }: { trip: Trip; onRefresh: ()
     [localAllowances],
   );
   // Only sum allowances for days currently in the trip's date range
-  const total = useMemo(
+  const allowancesTotal = useMemo(
     () => days.reduce((sum, date) => sum + (allowanceMap.get(date)?.dailyAllowanceEuro ?? 0), 0),
     [days, allowanceMap],
   );
@@ -1936,6 +1998,15 @@ function TripReport({ trip, onRefresh: _onRefresh }: { trip: Trip; onRefresh: ()
       (c) => c.country.toLowerCase().includes(q) || c.abbr.toLowerCase().includes(q),
     );
   }, [countrySearch]);
+
+  const receipts = documents.filter((d) => d.isReceipt);
+  const reimbursableTotal = receipts
+    .filter((d) => d.receiptType === "reimbursable")
+    .reduce((sum, d) => sum + (d.receiptAmount ?? 0), 0);
+  const reportOnlyTotal = receipts
+    .filter((d) => d.receiptType === "report_only")
+    .reduce((sum, d) => sum + (d.receiptAmount ?? 0), 0);
+  const grandTotal = allowancesTotal + reimbursableTotal;
 
   function handleDayClick(date: string, e: MouseEvent) {
     e.stopPropagation();
@@ -2018,7 +2089,7 @@ function TripReport({ trip, onRefresh: _onRefresh }: { trip: Trip; onRefresh: ()
       </div>
 
       <div className="trip-report-footer">
-        <strong className="trip-total">Total daily allowances: {total}€</strong>
+        <strong className="trip-total">Total daily allowances: {allowancesTotal}€</strong>
       </div>
 
       {selectedDays.size > 0 && (
@@ -2055,7 +2126,219 @@ function TripReport({ trip, onRefresh: _onRefresh }: { trip: Trip; onRefresh: ()
           </ul>
         </div>
       )}
+
+      {/* Payment receipts section */}
+      <div className="receipt-section" onClick={(e) => e.stopPropagation()}>
+        <h3 className="receipt-section-title">Payment receipts</h3>
+
+        {isDocumentsLoading && documents.length === 0 ? (
+          <p className="muted-small">Loading documents…</p>
+        ) : documents.length === 0 ? (
+          <p className="muted-small">No documents in this trip.</p>
+        ) : (
+          <div className="receipt-list">
+            {documents.map((doc) => (
+              <ReceiptRow key={doc.id} document={doc} onUpdate={onUpdateDocument} />
+            ))}
+          </div>
+        )}
+
+        {receipts.length > 0 && (
+          <div className="receipt-totals">
+            {reimbursableTotal > 0 && (
+              <span className="receipt-total-item">
+                <span className="receipt-total-label">Reimbursable</span>
+                <span className="receipt-total-amount">{reimbursableTotal.toFixed(2)} €</span>
+              </span>
+            )}
+            {reportOnlyTotal > 0 && (
+              <span className="receipt-total-item">
+                <span className="receipt-total-label">Report only</span>
+                <span className="receipt-total-amount">{reportOnlyTotal.toFixed(2)} €</span>
+              </span>
+            )}
+            <span className="receipt-total-item receipt-grand-total">
+              <span className="receipt-total-label">Trip total (allowances + reimbursable)</span>
+              <strong className="receipt-total-amount">{grandTotal.toFixed(2)} €</strong>
+            </span>
+          </div>
+        )}
+      </div>
     </article>
+  );
+}
+
+function documentLabel(doc: DocumentRecord): string {
+  if (doc.originalFileName) return doc.originalFileName;
+  if (doc.sourceType === "text_input") return "Text document";
+  if (doc.sourceType === "screenshot") return "Screenshot";
+  if (doc.sourceType === "email_text" || doc.sourceType === "email_attachment") return "Email document";
+  return "Document";
+}
+
+function ReceiptRow({
+  document,
+  onUpdate,
+}: {
+  document: DocumentRecord;
+  onUpdate: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+}) {
+  interface ReceiptDraft {
+    receiptDate: string;
+    receiptPurpose: string;
+    receiptAmount: string;
+    receiptCurrency: string;
+    receiptType: "reimbursable" | "report_only";
+  }
+
+  const [draft, setDraft] = useState<ReceiptDraft>(() => ({
+    receiptDate: document.receiptDate ?? "",
+    receiptPurpose: document.receiptPurpose ?? "",
+    receiptAmount: document.receiptAmount?.toString() ?? "",
+    receiptCurrency: document.receiptCurrency ?? "EUR",
+    receiptType: document.receiptType ?? "reimbursable",
+  }));
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Sync draft when document prop changes (e.g. after optimistic update confirmed)
+  useEffect(() => {
+    setDraft({
+      receiptDate: document.receiptDate ?? "",
+      receiptPurpose: document.receiptPurpose ?? "",
+      receiptAmount: document.receiptAmount?.toString() ?? "",
+      receiptCurrency: document.receiptCurrency ?? "EUR",
+      receiptType: document.receiptType ?? "reimbursable",
+    });
+  }, [document.receiptDate, document.receiptPurpose, document.receiptAmount, document.receiptCurrency, document.receiptType]);
+
+  async function toggleReceipt() {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onUpdate(document.id, { isReceipt: !document.isReceipt });
+    } catch (caught) {
+      setSaveError(caught instanceof Error ? caught.message : "Could not save.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function saveDraft() {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const amount = draft.receiptAmount.trim() ? parseFloat(draft.receiptAmount) : null;
+      await onUpdate(document.id, {
+        receiptDate: draft.receiptDate || null,
+        receiptPurpose: draft.receiptPurpose.trim() || null,
+        receiptAmount: Number.isFinite(amount) ? amount : null,
+        receiptCurrency: draft.receiptCurrency.trim() || null,
+        receiptType: draft.receiptType,
+      });
+    } catch (caught) {
+      setSaveError(caught instanceof Error ? caught.message : "Could not save.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const isDraftDirty =
+    (draft.receiptDate || null) !== document.receiptDate ||
+    (draft.receiptPurpose.trim() || null) !== document.receiptPurpose ||
+    draft.receiptType !== (document.receiptType ?? "reimbursable") ||
+    draft.receiptCurrency !== (document.receiptCurrency ?? "EUR") ||
+    (draft.receiptAmount.trim() ? parseFloat(draft.receiptAmount) : null) !== document.receiptAmount;
+
+  return (
+    <div className={`receipt-row${document.isReceipt ? " is-receipt" : ""}`}>
+      <div className="receipt-row-header">
+        <span className="receipt-filename">{documentLabel(document)}</span>
+        <button
+          type="button"
+          className={`receipt-toggle${document.isReceipt ? " active" : ""}`}
+          onClick={toggleReceipt}
+          disabled={isSaving}
+          title={document.isReceipt ? "Remove as receipt" : "Mark as receipt"}
+        >
+          {document.isReceipt ? "Receipt ✓" : "Mark as receipt"}
+        </button>
+      </div>
+
+      {document.isReceipt && (
+        <div className="receipt-fields">
+          <label className="receipt-field">
+            <span>Date</span>
+            <input
+              type="date"
+              value={draft.receiptDate}
+              onChange={(e) => setDraft({ ...draft, receiptDate: e.target.value })}
+            />
+          </label>
+          <label className="receipt-field">
+            <span>Purpose</span>
+            <input
+              type="text"
+              placeholder="e.g. Hotel booking"
+              value={draft.receiptPurpose}
+              onChange={(e) => setDraft({ ...draft, receiptPurpose: e.target.value })}
+            />
+          </label>
+          <label className="receipt-field receipt-field-amount">
+            <span>Amount</span>
+            <div className="receipt-amount-row">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={draft.receiptAmount}
+                onChange={(e) => setDraft({ ...draft, receiptAmount: e.target.value })}
+              />
+              <input
+                type="text"
+                className="receipt-currency"
+                maxLength={3}
+                placeholder="EUR"
+                value={draft.receiptCurrency}
+                onChange={(e) => setDraft({ ...draft, receiptCurrency: e.target.value.toUpperCase() })}
+              />
+            </div>
+          </label>
+          <div className="receipt-field">
+            <span>Type</span>
+            <div className="receipt-type-toggle">
+              <button
+                type="button"
+                className={draft.receiptType === "reimbursable" ? "active" : ""}
+                onClick={() => setDraft({ ...draft, receiptType: "reimbursable" })}
+              >
+                Reimbursable
+              </button>
+              <button
+                type="button"
+                className={draft.receiptType === "report_only" ? "active" : ""}
+                onClick={() => setDraft({ ...draft, receiptType: "report_only" })}
+              >
+                Report only
+              </button>
+            </div>
+          </div>
+          {saveError && <div className="inline-error">{saveError}</div>}
+          <div className="receipt-save-row">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={saveDraft}
+              disabled={!isDraftDirty || isSaving}
+            >
+              {isSaving ? <LoaderCircle className="button-spinner" size={16} aria-hidden="true" /> : <Check size={16} />}
+              {isSaving ? "Saving" : isDraftDirty ? "Save" : "Saved"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

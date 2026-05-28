@@ -22,6 +22,7 @@ import type {
   UpdateUserProfileInput,
   UpdateBookingInput,
   UpdateAnalysisJobInput,
+  UpdateDocumentInput,
   UpdateTripInput,
   VerifyOtpResult,
 } from "../state-provider";
@@ -84,7 +85,7 @@ export class LocalStateProvider implements TripStarStateProvider {
     this.users = clone(options.users ?? persisted?.users ?? seedUsers);
     this.trips = this.normalizeTrips(clone(options.trips ?? persisted?.trips ?? seedTrips));
     this.bookings = this.normalizeBookings(clone(options.bookings ?? persisted?.bookings ?? seedBookings));
-    this.documents = clone(options.documents ?? persisted?.documents ?? seedDocuments);
+    this.documents = this.normalizeDocuments(clone(options.documents ?? persisted?.documents ?? seedDocuments));
     this.analysisJobs = clone(options.analysisJobs ?? persisted?.analysisJobs ?? []);
     this.activity = clone(options.activity ?? persisted?.activity ?? []);
     this.otpChallenges = clone(options.otpChallenges ?? persisted?.otpChallenges ?? []);
@@ -367,6 +368,9 @@ export class LocalStateProvider implements TripStarStateProvider {
       isReceipt: input.isReceipt ?? false,
       receiptAmount: input.receiptAmount ?? null,
       receiptCurrency: input.receiptCurrency ?? null,
+      receiptDate: null,
+      receiptPurpose: null,
+      receiptType: null,
       receiptJson: input.receiptJson ?? null,
       processingStatus: input.processingStatus,
       createdAt: timestamp,
@@ -375,6 +379,13 @@ export class LocalStateProvider implements TripStarStateProvider {
     };
 
     this.documents.push(document);
+    this.persist();
+    return clone(document);
+  }
+
+  async updateDocument(id: Id, input: UpdateDocumentInput): Promise<DocumentRecord> {
+    const document = this.requireDocument(id);
+    Object.assign(document, input, { updatedAt: isoDate(this.now()) });
     this.persist();
     return clone(document);
   }
@@ -606,6 +617,15 @@ export class LocalStateProvider implements TripStarStateProvider {
     }
 
     return [...byTripNumber.values()];
+  }
+
+  private normalizeDocuments(documents: DocumentRecord[]): DocumentRecord[] {
+    return documents.map((doc) => ({
+      ...doc,
+      receiptDate: doc.receiptDate ?? null,
+      receiptPurpose: doc.receiptPurpose ?? null,
+      receiptType: doc.receiptType ?? null,
+    }));
   }
 
   private normalizeBookings(bookings: Booking[]): Booking[] {
