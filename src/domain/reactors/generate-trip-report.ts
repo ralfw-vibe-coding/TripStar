@@ -61,6 +61,33 @@ export async function generateTripReport(
   const folder = zip.folder(zipName)!;
   folder.file(`order #${trip.tripNumber}.pdf`, sbOrderPdf);
   folder.file(`financial report #${trip.tripNumber}.pdf`, sbFinancialPdf);
+
+  // Add receipt document files into subfolders
+  const reimbursable = receipts.filter((r) => r.receiptType === "reimbursable");
+  const nonReimbursable = receipts.filter((r) => r.receiptType !== "reimbursable");
+
+  async function addReceiptsToFolder(docs: typeof receipts, subfolderName: string) {
+    if (docs.length === 0) return;
+    const sub = folder.folder(subfolderName)!;
+    for (let i = 0; i < docs.length; i++) {
+      const doc = docs[i];
+      if (!doc.storageKey) continue;
+      try {
+        const { base64 } = await storage.readDocument(doc.storageKey);
+        const ext = extForMime(doc.mimeType);
+        const baseName = doc.originalFileName ?? `receipt-${doc.id}${ext}`;
+        const safeName = baseName.replace(/[/\\]/g, "_");
+        const fileName = `${String(i + 1).padStart(2, "0")}_${safeName}`;
+        sub.file(fileName, Buffer.from(base64, "base64"));
+      } catch {
+        // skip unreadable files silently
+      }
+    }
+  }
+
+  await addReceiptsToFolder(reimbursable, "receipts-reimbursable");
+  await addReceiptsToFolder(nonReimbursable, "receipts-non-reimbursable");
+
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
   // Store in R2 under reports/ prefix with a random key
@@ -85,4 +112,16 @@ export async function generateTripReport(
     tripTitle: trip.title,
     downloadUrl,
   });
+}
+
+function extForMime(mimeType: string | null): string {
+  switch (mimeType) {
+    case "application/pdf": return ".pdf";
+    case "image/jpeg":      return ".jpg";
+    case "image/png":       return ".png";
+    case "image/webp":      return ".webp";
+    case "image/gif":       return ".gif";
+    case "text/plain":      return ".txt";
+    default:                return "";
+  }
 }
