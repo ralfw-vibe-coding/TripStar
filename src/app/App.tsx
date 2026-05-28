@@ -1923,9 +1923,10 @@ function TripReport({ trip, onRefresh: _onRefresh }: { trip: Trip; onRefresh: ()
     () => new Map(localAllowances.map((a) => [a.date, a])),
     [localAllowances],
   );
+  // Only sum allowances for days currently in the trip's date range
   const total = useMemo(
-    () => localAllowances.reduce((sum, a) => sum + a.dailyAllowanceEuro, 0),
-    [localAllowances],
+    () => days.reduce((sum, date) => sum + (allowanceMap.get(date)?.dailyAllowanceEuro ?? 0), 0),
+    [days, allowanceMap],
   );
 
   const filteredCountries = useMemo(() => {
