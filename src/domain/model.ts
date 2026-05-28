@@ -20,6 +20,8 @@ export interface User {
   name: string | null;
   companyName: string | null;
   jobPosition: string | null;
+  signatureEmployee: string | null;  // data URI (base64 image)
+  signatureManager: string | null;   // data URI (base64 image)
   createdAt: string;
   updatedAt: string;
 }

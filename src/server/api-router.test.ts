@@ -14,6 +14,8 @@ const testUser: User = {
   name: null,
   companyName: null,
   jobPosition: null,
+  signatureEmployee: null,
+  signatureManager: null,
   createdAt: now,
   updatedAt: now,
 };

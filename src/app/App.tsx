@@ -705,12 +705,30 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
   const [name, setName] = useState(user.name ?? "");
   const [companyName, setCompanyName] = useState(user.companyName ?? "");
   const [jobPosition, setJobPosition] = useState(user.jobPosition ?? "");
+  const [signatureEmployee, setSignatureEmployee] = useState<string | null>(user.signatureEmployee ?? null);
+  const [signatureManager, setSignatureManager] = useState<string | null>(user.signatureManager ?? null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  function handleSignatureUpload(event: React.ChangeEvent<HTMLInputElement>, setter: (v: string | null) => void) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result;
+      if (typeof result === "string") setter(result);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    if (!signatureEmployee || !signatureManager) {
+      setError("Both signatures are required.");
+      return;
+    }
     setIsSaving(true);
     try {
       const result = await updateProfile({
@@ -718,6 +736,8 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
         name: name.trim() || null,
         companyName: companyName.trim() || null,
         jobPosition: jobPosition.trim() || null,
+        signatureEmployee,
+        signatureManager,
       });
       onSave(result.user);
     } catch (caught) {
@@ -759,6 +779,44 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
           Job position *
           <input value={jobPosition} onChange={(event) => setJobPosition(event.target.value)} required />
         </label>
+
+        <div className="field-label">
+          Employee signature *
+          <div className="signature-field">
+            {signatureEmployee
+              ? <img src={signatureEmployee} className="signature-preview" alt="Employee signature" />
+              : <span className="signature-empty">No signature uploaded</span>}
+            <div className="signature-actions">
+              <label className="secondary-button signature-upload-btn">
+                {signatureEmployee ? "Replace" : "Upload image"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
+                  onChange={(e) => handleSignatureUpload(e, setSignatureEmployee)} />
+              </label>
+              {signatureEmployee && (
+                <button type="button" className="secondary-button" onClick={() => setSignatureEmployee(null)}>Remove</button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="field-label">
+          Manager signature *
+          <div className="signature-field">
+            {signatureManager
+              ? <img src={signatureManager} className="signature-preview" alt="Manager signature" />
+              : <span className="signature-empty">No signature uploaded</span>}
+            <div className="signature-actions">
+              <label className="secondary-button signature-upload-btn">
+                {signatureManager ? "Replace" : "Upload image"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
+                  onChange={(e) => handleSignatureUpload(e, setSignatureManager)} />
+              </label>
+              {signatureManager && (
+                <button type="button" className="secondary-button" onClick={() => setSignatureManager(null)}>Remove</button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {error && <div className="notice">{error}</div>}
 

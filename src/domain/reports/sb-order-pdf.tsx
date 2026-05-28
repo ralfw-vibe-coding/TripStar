@@ -1,5 +1,5 @@
 import React from "react";
-import { Document, Font, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { Trip, User } from "../model";
 import { NOTO_SANS_BOLD, NOTO_SANS_REGULAR } from "./fonts/noto-sans-data";
 
@@ -91,7 +91,8 @@ const styles = StyleSheet.create({
   },
   signatureBlock: { width: "45%" },
   sigLabelBg: { fontWeight: "bold", fontSize: 8 },
-  sigLabelEn: { fontSize: 7, color: "#555", marginBottom: 18 },
+  sigLabelEn: { fontSize: 7, color: "#555", marginBottom: 4 },
+  signatureImage: { height: 36, objectFit: "contain" as const, marginBottom: 2 },
   signatureLine: { borderBottom: "0.5pt solid #000", height: 14 },
 });
 
@@ -210,13 +211,19 @@ export function SbOrderDocument({ trip, user }: { trip: Trip; user: User }) {
         {/* Signatures */}
         <View style={styles.signatureRow}>
           <View style={styles.signatureBlock}>
-            <Text style={styles.sigLabelBg}>Гл. Счетоводител</Text>
-            <Text style={styles.sigLabelEn}>Chief Accountant</Text>
+            <Text style={styles.sigLabelBg}>Управител</Text>
+            <Text style={styles.sigLabelEn}>Director / Manager</Text>
+            {user.signatureManager
+              ? <Image src={user.signatureManager} style={styles.signatureImage} />
+              : null}
             <View style={styles.signatureLine} />
           </View>
           <View style={styles.signatureBlock}>
-            <Text style={styles.sigLabelBg}>Управител</Text>
-            <Text style={styles.sigLabelEn}>Director</Text>
+            <Text style={styles.sigLabelBg}>Командирован</Text>
+            <Text style={styles.sigLabelEn}>Employee</Text>
+            {user.signatureEmployee
+              ? <Image src={user.signatureEmployee} style={styles.signatureImage} />
+              : null}
             <View style={styles.signatureLine} />
           </View>
         </View>

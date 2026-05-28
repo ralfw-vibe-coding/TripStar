@@ -102,7 +102,7 @@ export function logout(): Promise<{ ok: true }> {
   return requestJson("/api/auth/logout", { method: "POST", body: JSON.stringify({}) });
 }
 
-export function updateProfile(input: { shortCode: string; name?: string | null; companyName?: string | null; jobPosition?: string | null }): Promise<{ user: User }> {
+export function updateProfile(input: { shortCode: string; name?: string | null; companyName?: string | null; jobPosition?: string | null; signatureEmployee?: string | null; signatureManager?: string | null }): Promise<{ user: User }> {
   return requestJson("/api/auth/profile", {
     method: "PATCH",
     body: JSON.stringify(input),

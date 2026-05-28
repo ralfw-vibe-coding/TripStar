@@ -67,6 +67,8 @@ export class PostgresStateProvider implements TripStarStateProvider {
       name: input.name !== undefined ? input.name : (user.name ?? null),
       companyName: input.companyName !== undefined ? input.companyName : (user.companyName ?? null),
       jobPosition: input.jobPosition !== undefined ? input.jobPosition : (user.jobPosition ?? null),
+      signatureEmployee: input.signatureEmployee !== undefined ? input.signatureEmployee : (user.signatureEmployee ?? null),
+      signatureManager: input.signatureManager !== undefined ? input.signatureManager : (user.signatureManager ?? null),
       updatedAt: this.nowIso(),
     };
     await this.sql`update users set data = ${toJson(updated)}, updated_at = ${updated.updatedAt} where id = ${userId}`;
@@ -714,6 +716,8 @@ export class PostgresStateProvider implements TripStarStateProvider {
       name: null,
       companyName: null,
       jobPosition: null,
+      signatureEmployee: null,
+      signatureManager: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };

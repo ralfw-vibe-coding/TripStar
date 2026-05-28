@@ -904,6 +904,38 @@ textarea:disabled {
   width: min(100%, 420px);
 }
 
+.signature-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.signature-preview {
+  max-height: 64px;
+  max-width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  object-fit: contain;
+  padding: 4px;
+}
+
+.signature-empty {
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.signature-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.signature-upload-btn {
+  cursor: pointer;
+}
+
 .document-dialog {
   width: min(100%, 680px);
 }

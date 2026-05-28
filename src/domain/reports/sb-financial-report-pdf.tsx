@@ -1,5 +1,5 @@
 import React from "react";
-import { Document, Font, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { DocumentRecord, Trip, User } from "../model";
 import { NOTO_SANS_BOLD, NOTO_SANS_REGULAR } from "./fonts/noto-sans-data";
 
@@ -72,6 +72,12 @@ const S = StyleSheet.create({
   grandTotalFinalRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 3, paddingTop: 3, borderTop: "0.5pt solid #000" },
   grandTotalFinalLabel: { fontWeight: "bold", marginRight: 6 },
   grandTotalFinalValue: { fontWeight: "bold", width: 65, textAlign: "right" },
+  sigRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 18 },
+  sigBlock: { width: "45%" },
+  sigLabelBg: { fontWeight: "bold", fontSize: 7 },
+  sigLabelEn: { fontSize: 6, color: "#555", marginBottom: 3 },
+  sigImage: { height: 30, objectFit: "contain" as const, marginBottom: 2 },
+  sigLine: { borderBottom: "0.5pt solid #000", height: 12 },
 });
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -287,6 +293,22 @@ export function SbFinancialReportDocument({
           <View style={S.grandTotalFinalRow}>
             <Text style={S.grandTotalFinalLabel}>= За възстановяване / Total reimbursement:</Text>
             <Text style={S.grandTotalFinalValue}>{fmt(grandTotal)} €</Text>
+          </View>
+        </View>
+
+        {/* Signatures */}
+        <View style={S.sigRow}>
+          <View style={S.sigBlock}>
+            <Text style={S.sigLabelBg}>Управител</Text>
+            <Text style={S.sigLabelEn}>Director / Manager</Text>
+            {user.signatureManager ? <Image src={user.signatureManager} style={S.sigImage} /> : null}
+            <View style={S.sigLine} />
+          </View>
+          <View style={S.sigBlock}>
+            <Text style={S.sigLabelBg}>Командирован</Text>
+            <Text style={S.sigLabelEn}>Employee</Text>
+            {user.signatureEmployee ? <Image src={user.signatureEmployee} style={S.sigImage} /> : null}
+            <View style={S.sigLine} />
           </View>
         </View>
 

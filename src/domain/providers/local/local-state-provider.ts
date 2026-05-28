@@ -109,6 +109,8 @@ export class LocalStateProvider implements TripStarStateProvider {
     if (input.name !== undefined) user.name = input.name;
     if (input.companyName !== undefined) user.companyName = input.companyName;
     if (input.jobPosition !== undefined) user.jobPosition = input.jobPosition;
+    if (input.signatureEmployee !== undefined) user.signatureEmployee = input.signatureEmployee;
+    if (input.signatureManager !== undefined) user.signatureManager = input.signatureManager;
     user.updatedAt = isoDate(this.now());
     await this.appendActivity({
       level: "info",
@@ -709,6 +711,8 @@ export class LocalStateProvider implements TripStarStateProvider {
       name: null,
       companyName: null,
       jobPosition: null,
+      signatureEmployee: null,
+      signatureManager: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };

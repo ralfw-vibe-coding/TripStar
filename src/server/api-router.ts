@@ -61,7 +61,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           return jsonResponse({ error: "Authentication required." }, { status: 401 });
         }
         return jsonResponse({
-          user: await provider.updateUserProfile(user.id, await readJson<{ shortCode: string; name?: string | null; companyName?: string | null; jobPosition?: string | null }>(request)),
+          user: await provider.updateUserProfile(user.id, await readJson<{ shortCode: string; name?: string | null; companyName?: string | null; jobPosition?: string | null; signatureEmployee?: string | null; signatureManager?: string | null }>(request)),
         });
       }
 

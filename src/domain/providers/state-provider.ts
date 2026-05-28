@@ -121,6 +121,8 @@ export interface UpdateUserProfileInput {
   name?: string | null;
   companyName?: string | null;
   jobPosition?: string | null;
+  signatureEmployee?: string | null;
+  signatureManager?: string | null;
 }
 
 export interface TripStarStateProvider {
