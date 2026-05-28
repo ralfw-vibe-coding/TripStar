@@ -184,7 +184,11 @@ export class PostgresStateProvider implements TripStarStateProvider {
   async createTrip(input: CreateTripInput): Promise<Trip> {
     await this.ready;
     const timestamp = this.nowIso();
-    const tripNumber = await this.nextTripNumber();
+    const tripNumber = input.tripNumber ?? await this.nextTripNumber();
+    const conflict = await this.sql`select id from trips where trip_number = ${tripNumber}`;
+    if (conflict.length > 0) {
+      throw new Error(`Trip number ${tripNumber} is already in use.`);
+    }
     const title = input.title.trim() || `#${tripNumber}`;
     const trip: Trip = {
       id: `trip_${tripNumber}`,
@@ -218,10 +222,17 @@ export class PostgresStateProvider implements TripStarStateProvider {
   async updateTrip(id: Id, input: UpdateTripInput): Promise<Trip> {
     await this.ready;
     const trip = await this.requireTrip(id);
+    if (input.tripNumber !== undefined) {
+      const conflict = await this.sql`select id from trips where trip_number = ${input.tripNumber} and id != ${id}`;
+      if (conflict.length > 0) {
+        throw new Error(`Trip number ${input.tripNumber} is already in use.`);
+      }
+    }
     const updated: Trip = { ...trip, ...input, updatedAt: this.nowIso() };
     await this.sql`
       update trips
       set owner_user_id = ${updated.ownerUserId},
+          trip_number = ${updated.tripNumber},
           start_date = ${updated.startDate},
           end_date = ${updated.endDate},
           archived_at = ${updated.archivedAt},

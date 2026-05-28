@@ -159,7 +159,9 @@ export function App() {
     setIsCreatingTrip(true);
     setError(null);
     try {
+      const tripNumberRaw = String(data.get("tripNumber")).trim();
       const trip = await createTrip({
+        tripNumber: tripNumberRaw || undefined,
         title: String(data.get("title")),
         startDate: String(data.get("startDate")),
         endDate: String(data.get("endDate")),
@@ -188,7 +190,9 @@ export function App() {
     setIsCreatingTrip(true);
     setError(null);
     try {
+      const tripNumberRaw = String(data.get("tripNumber")).trim();
       const trip = await updateTrip(editingTrip.id, {
+        tripNumber: tripNumberRaw || editingTrip.tripNumber,
         title: String(data.get("title")),
         startDate: String(data.get("startDate")),
         endDate: String(data.get("endDate")),
@@ -509,6 +513,7 @@ export function App() {
       {isTripDialogOpen && view && (
         <TripDialog
           users={view.users}
+          allTrips={view.trips}
           currentUserId={currentUser.id}
           trip={editingTrip}
           onClose={() => {
@@ -1830,6 +1835,7 @@ async function pdfFileToPayload(file: File): Promise<{ name: string; size: numbe
 
 function TripDialog({
   users,
+  allTrips,
   currentUserId,
   trip,
   onClose,
@@ -1837,6 +1843,7 @@ function TripDialog({
   isSubmitting,
 }: {
   users: User[];
+  allTrips: Trip[];
   currentUserId: string;
   trip: Trip | null;
   onClose: () => void;
@@ -1844,23 +1851,40 @@ function TripDialog({
   isSubmitting: boolean;
 }) {
   const isEditing = trip !== null;
+  const suggestedTripNumber = useMemo(() => {
+    const nums = allTrips
+      .map((t) => Number.parseInt(t.tripNumber, 10))
+      .filter((n) => Number.isFinite(n));
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return String(next).padStart(3, "0");
+  }, [allTrips]);
+
   return (
     <div className="modal-backdrop" role="presentation">
       <form className="trip-dialog" onSubmit={onSubmit}>
         <header className="dialog-header">
           <div>
             <h2>{isEditing ? "Edit trip" : "Create trip"}</h2>
-            <p>{isEditing ? `#${trip.tripNumber}` : "Details can be changed later."}</p>
           </div>
           <button className="icon-command" type="button" aria-label="Close" onClick={onClose}>
             <X size={18} />
           </button>
         </header>
 
-        <label className="field-label">
-          Title
-          <input name="title" placeholder="Trip number if empty" defaultValue={trip?.title ?? ""} />
-        </label>
+        <div className="title-number-grid">
+          <label className="field-label">
+            Title
+            <input name="title" placeholder="Trip number if empty" defaultValue={trip?.title ?? ""} />
+          </label>
+          <label className="field-label">
+            Number
+            <input
+              name="tripNumber"
+              defaultValue={isEditing ? trip.tripNumber : suggestedTripNumber}
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            />
+          </label>
+        </div>
 
         <div className="date-grid">
           <label className="field-label">

@@ -211,7 +211,10 @@ export class LocalStateProvider implements TripStarStateProvider {
 
   async createTrip(input: CreateTripInput): Promise<Trip> {
     const timestamp = isoDate(this.now());
-    const tripNumber = this.nextTripNumber();
+    const tripNumber = input.tripNumber ?? this.nextTripNumber();
+    if (this.trips.some((t) => t.tripNumber === tripNumber)) {
+      throw new Error(`Trip number ${tripNumber} is already in use.`);
+    }
     const title = input.title.trim() || `#${tripNumber}`;
     const trip: Trip = {
       id: `trip_${tripNumber}`,
@@ -243,6 +246,12 @@ export class LocalStateProvider implements TripStarStateProvider {
 
   async updateTrip(id: Id, input: UpdateTripInput): Promise<Trip> {
     const trip = this.requireTrip(id);
+    if (input.tripNumber !== undefined) {
+      const conflict = this.trips.find((t) => t.tripNumber === input.tripNumber && t.id !== id);
+      if (conflict) {
+        throw new Error(`Trip number ${input.tripNumber} is already in use.`);
+      }
+    }
     Object.assign(trip, input, { updatedAt: isoDate(this.now()) });
     await this.appendActivity({
       level: "info",

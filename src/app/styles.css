@@ -1097,6 +1097,19 @@ textarea:disabled {
   gap: 12px;
 }
 
+/* Title + optional trip number side by side */
+.title-number-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.title-number-grid .field-label:last-child input {
+  width: 72px;
+  text-align: center;
+}
+
 .user-picker {
   border: 1px solid #d9e0e5;
   border-radius: 8px;

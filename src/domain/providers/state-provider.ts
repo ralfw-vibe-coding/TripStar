@@ -1,6 +1,7 @@
 import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Id, IngestPart, Trip, User } from "../model";
 
 export interface CreateTripInput {
+  tripNumber?: string;
   title: string;
   ownerUserId: Id;
   startDate: string;
@@ -11,6 +12,7 @@ export interface CreateTripInput {
 }
 
 export interface UpdateTripInput {
+  tripNumber?: string;
   title?: string;
   startDate?: string;
   endDate?: string;
