@@ -6,6 +6,7 @@ import type { Id } from "../model";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import { SbOrderDocument } from "../reports/sb-order-pdf";
+import { SbFinancialReportDocument } from "../reports/sb-financial-report-pdf";
 import { sendReportReadyEmail } from "../../server/email";
 
 export interface GenerateTripReportInput {
@@ -38,15 +39,28 @@ export async function generateTripReport(
   const user = users.find((u) => u.id === userId);
   if (!user) throw new Error(`User not found: ${userId}`);
 
-  // Generate Sb Order PDF
+  // Load receipt documents for this trip
+  const allDocuments = await state.listDocuments();
+  const receipts = allDocuments.filter(
+    (d) => d.tripId === trip.id && d.isReceipt && !d.deletedAt,
+  );
+
+  // Generate PDFs
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sbOrderPdf = await renderToBuffer(
     React.createElement(SbOrderDocument, { trip, user }) as any,
   );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sbFinancialPdf = await renderToBuffer(
+    React.createElement(SbFinancialReportDocument, { trip, user, receipts }) as any,
+  );
 
-  // Build ZIP
+  // Build ZIP — all files go into a folder matching the ZIP filename
+  const zipName = `tripstar report #${trip.tripNumber}`;
   const zip = new JSZip();
-  zip.file(`order #${trip.tripNumber}.pdf`, sbOrderPdf);
+  const folder = zip.folder(zipName)!;
+  folder.file(`order #${trip.tripNumber}.pdf`, sbOrderPdf);
+  folder.file(`financial report #${trip.tripNumber}.pdf`, sbFinancialPdf);
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
   // Store in R2 under reports/ prefix with a random key
