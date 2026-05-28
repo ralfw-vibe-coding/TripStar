@@ -951,6 +951,7 @@ function CalendarPanel({
   }
 
   const visibleTrips = visibleTripsForUser(view.trips, currentUser.id);
+  const assignableTrips = visibleTrips.filter((trip) => trip.ownerUserId === currentUser.id);
   const filterUsers = calendarFilterUsers(view.users, visibleTrips, currentUser.id);
   const filteredBookings = filterCalendarBookings(view.bookings, tripFilter, userFilter, dateFilter);
   const bookingGroups = groupBookingsByDay(filteredBookings);
@@ -1033,6 +1034,7 @@ function CalendarPanel({
                     onClearPendingDelete={onClearPendingDelete}
                     onOpenDocument={onOpenDocument}
                     visibleTrips={visibleTrips}
+                    assignableTrips={assignableTrips}
                     users={view.users}
                     currentUserId={currentUser.id}
                   />
@@ -1096,6 +1098,7 @@ function BookingCard({
   onClearPendingDelete,
   onOpenDocument,
   visibleTrips,
+  assignableTrips,
   users,
   currentUserId,
 }: {
@@ -1110,6 +1113,7 @@ function BookingCard({
   onClearPendingDelete: () => void;
   onOpenDocument: (documentId: string) => void;
   visibleTrips: Trip[];
+  assignableTrips: Trip[];
   users: User[];
   currentUserId: string;
 }) {
@@ -1290,7 +1294,7 @@ function BookingCard({
               Trip
               <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
                 <option value="">Inbox / no trip</option>
-                {visibleTrips.map((trip) => (
+                {assignableTrips.map((trip) => (
                   <option key={trip.id} value={trip.id}>
                     {trip.title} #{trip.tripNumber}
                   </option>
