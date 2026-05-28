@@ -232,4 +232,32 @@ describe("API router", () => {
 
     expect(response.status).toBe(404);
   });
+
+  it("uploads a trip document via POST /api/documents/trip-upload", async () => {
+    // A tiny 1x1 white PNG as base64
+    const base64Png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg==";
+    const response = await handleApiRequest(
+      new Request("http://localhost/api/documents/trip-upload", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeader },
+        body: JSON.stringify({
+          base64: base64Png,
+          originalFileName: "test.png",
+          mimeType: "image/png",
+          tripId: "trip_200",
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      tripId: "trip_200",
+      originalFileName: "test.png",
+      mimeType: "image/png",
+      sourceType: "upload",
+      processingStatus: "ready",
+      isReceipt: false,
+    });
+  });
 });

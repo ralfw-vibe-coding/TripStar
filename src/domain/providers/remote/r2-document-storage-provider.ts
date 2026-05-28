@@ -63,6 +63,7 @@ export class R2DocumentStorageProvider implements DocumentStorageProvider {
 }
 
 function extensionForMimeType(mimeType: string): string {
+  if (mimeType === "application/pdf") return "pdf";
   if (mimeType === "image/jpeg") return "jpg";
   if (mimeType === "image/webp") return "webp";
   return "png";

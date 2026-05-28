@@ -53,6 +53,7 @@ import {
   submitTextDocument,
   updateBooking,
   updateDocument as updateDocumentApi,
+  uploadTripDocument,
   updateProfile,
   updateTrip,
   verifyOtp,
@@ -345,12 +346,23 @@ export function App() {
     setView((current) => (current ? { ...current, users: current.users.map((candidate) => (candidate.id === user.id ? user : candidate)) } : current));
   }
 
+  async function handleUploadTripDocument(tripId: string, input: { base64: string; originalFileName: string; mimeType: string }) {
+    const doc = await uploadTripDocument({ ...input, tripId });
+    setDocuments((docs) => [...docs, doc]);
+  }
+
   async function handleUpdateDocument(docId: string, input: Partial<DocumentRecord>) {
     const previousDocuments = documents;
     setDocuments((docs) => docs.map((d) => d.id === docId ? { ...d, ...input } : d));
     try {
       const updated = await updateDocumentApi(docId, input);
-      setDocuments((docs) => docs.map((d) => d.id === docId ? updated : d));
+      // Preserve the client-side tripId if the server returned null —
+      // the document may be associated via booking, not directly on the record.
+      setDocuments((docs) =>
+        docs.map((d) =>
+          d.id === docId ? { ...updated, tripId: updated.tripId ?? d.tripId } : d,
+        ),
+      );
     } catch (caught) {
       setDocuments(previousDocuments);
       throw caught;
@@ -488,6 +500,8 @@ export function App() {
             isDocumentsLoading={isDocumentsLoading}
             onRefresh={reloadCalendar}
             onUpdateDocument={handleUpdateDocument}
+            onOpenDocument={handleOpenDocument}
+            onUploadDocument={handleUploadTripDocument}
           />
         )}
       </section>
@@ -1904,12 +1918,16 @@ function ReportsPanel({
   isDocumentsLoading,
   onRefresh,
   onUpdateDocument,
+  onOpenDocument,
+  onUploadDocument,
 }: {
   trips: Trip[];
   documents: DocumentRecord[];
   isDocumentsLoading: boolean;
   onRefresh: () => void;
   onUpdateDocument: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+  onOpenDocument: (documentId: string) => void;
+  onUploadDocument: (tripId: string, input: { base64: string; originalFileName: string; mimeType: string }) => Promise<void>;
 }) {
   return (
     <section className="reports">
@@ -1929,6 +1947,8 @@ function ReportsPanel({
             isDocumentsLoading={isDocumentsLoading}
             onRefresh={onRefresh}
             onUpdateDocument={onUpdateDocument}
+            onOpenDocument={onOpenDocument}
+            onUploadDocument={onUploadDocument}
           />
         ))}
       </div>
@@ -1963,12 +1983,16 @@ function TripReport({
   isDocumentsLoading,
   onRefresh: _onRefresh,
   onUpdateDocument,
+  onOpenDocument,
+  onUploadDocument,
 }: {
   trip: Trip;
   documents: DocumentRecord[];
   isDocumentsLoading: boolean;
   onRefresh: () => void;
   onUpdateDocument: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+  onOpenDocument: (documentId: string) => void;
+  onUploadDocument: (tripId: string, input: { base64: string; originalFileName: string; mimeType: string }) => Promise<void>;
 }) {
   const days = tripDays(trip);
 
@@ -1998,6 +2022,32 @@ function TripReport({
       (c) => c.country.toLowerCase().includes(q) || c.abbr.toLowerCase().includes(q),
     );
   }, [countrySearch]);
+
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function handleUploadFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Could not read file."));
+        reader.readAsDataURL(file);
+      });
+      const [, base64 = ""] = dataUrl.split(",", 2);
+      await onUploadDocument(trip.id, { base64, originalFileName: file.name, mimeType: file.type });
+    } catch (caught) {
+      setUploadError(caught instanceof Error ? caught.message : "Upload failed.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   const receipts = documents.filter((d) => d.isReceipt);
   const reimbursableTotal = receipts
@@ -2127,18 +2177,19 @@ function TripReport({
         </div>
       )}
 
-      {/* Payment receipts section */}
+      {/* Documents section */}
       <div className="receipt-section" onClick={(e) => e.stopPropagation()}>
-        <h3 className="receipt-section-title">Payment receipts</h3>
 
+        {/* ── Payment receipts ── */}
+        <h3 className="receipt-section-title">Payment receipts</h3>
         {isDocumentsLoading && documents.length === 0 ? (
           <p className="muted-small">Loading documents…</p>
-        ) : documents.length === 0 ? (
-          <p className="muted-small">No documents in this trip.</p>
+        ) : receipts.length === 0 ? (
+          <p className="muted-small">No payment receipts yet — mark a booking document below as a payment receipt.</p>
         ) : (
           <div className="receipt-list">
-            {documents.map((doc) => (
-              <ReceiptRow key={doc.id} document={doc} onUpdate={onUpdateDocument} />
+            {receipts.map((doc) => (
+              <ZahlungsbelegRow key={doc.id} document={doc} onUpdate={onUpdateDocument} onOpenDocument={onOpenDocument} />
             ))}
           </div>
         )}
@@ -2158,11 +2209,48 @@ function TripReport({
               </span>
             )}
             <span className="receipt-total-item receipt-grand-total">
-              <span className="receipt-total-label">Trip total (allowances + reimbursable)</span>
+              <span className="receipt-total-label">Trip total (daily allowances + reimbursements)</span>
               <strong className="receipt-total-amount">{grandTotal.toFixed(2)} €</strong>
             </span>
           </div>
         )}
+
+        {/* ── Booking documents ── */}
+        {documents.filter((d) => !d.isReceipt).length > 0 && (
+          <>
+            <h3 className="receipt-section-title" style={{ marginTop: 16 }}>Booking documents</h3>
+            <div className="receipt-list">
+              {documents.filter((d) => !d.isReceipt).map((doc) => (
+                <BuchungsbelegRow key={doc.id} document={doc} onUpdate={onUpdateDocument} onOpenDocument={onOpenDocument} />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── Upload ── */}
+        <div className="receipt-upload-row">
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"
+            style={{ display: "none" }}
+            onChange={handleUploadFileChange}
+            disabled={isUploading}
+          />
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={isUploading}
+          >
+            {isUploading
+              ? <LoaderCircle size={14} className="button-spinner" aria-hidden="true" />
+              : <FileUp size={14} />}
+            {isUploading ? "Uploading…" : "Upload document"}
+          </button>
+          {uploadError && <span className="inline-error">{uploadError}</span>}
+        </div>
+
       </div>
     </article>
   );
@@ -2176,55 +2264,37 @@ function documentLabel(doc: DocumentRecord): string {
   return "Document";
 }
 
-function ReceiptRow({
+/** Dokument, das als Zahlungsbeleg markiert ist — zeigt alle Felder, aufklappbar zum Bearbeiten */
+function ZahlungsbelegRow({
   document,
   onUpdate,
+  onOpenDocument,
 }: {
   document: DocumentRecord;
   onUpdate: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+  onOpenDocument: (documentId: string) => void;
 }) {
-  interface ReceiptDraft {
-    receiptDate: string;
-    receiptPurpose: string;
-    receiptAmount: string;
-    receiptCurrency: string;
-    receiptType: "reimbursable" | "report_only";
-  }
-
-  const [draft, setDraft] = useState<ReceiptDraft>(() => ({
-    receiptDate: document.receiptDate ?? "",
-    receiptPurpose: document.receiptPurpose ?? "",
-    receiptAmount: document.receiptAmount?.toString() ?? "",
-    receiptCurrency: document.receiptCurrency ?? "EUR",
-    receiptType: document.receiptType ?? "reimbursable",
-  }));
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [draft, setDraft] = useState(() => draftFromDocument(document));
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Sync draft when document prop changes (e.g. after optimistic update confirmed)
   useEffect(() => {
-    setDraft({
-      receiptDate: document.receiptDate ?? "",
-      receiptPurpose: document.receiptPurpose ?? "",
-      receiptAmount: document.receiptAmount?.toString() ?? "",
-      receiptCurrency: document.receiptCurrency ?? "EUR",
-      receiptType: document.receiptType ?? "reimbursable",
-    });
+    setDraft(draftFromDocument(document));
   }, [document.receiptDate, document.receiptPurpose, document.receiptAmount, document.receiptCurrency, document.receiptType]);
 
-  async function toggleReceipt() {
+  async function remove() {
     setIsSaving(true);
-    setSaveError(null);
     try {
-      await onUpdate(document.id, { isReceipt: !document.isReceipt });
+      await onUpdate(document.id, { isReceipt: false });
     } catch (caught) {
-      setSaveError(caught instanceof Error ? caught.message : "Could not save.");
+      setSaveError(caught instanceof Error ? caught.message : "Failed to save.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function saveDraft() {
+  async function save() {
     setIsSaving(true);
     setSaveError(null);
     try {
@@ -2236,109 +2306,172 @@ function ReceiptRow({
         receiptCurrency: draft.receiptCurrency.trim() || null,
         receiptType: draft.receiptType,
       });
+      setIsExpanded(false);
     } catch (caught) {
-      setSaveError(caught instanceof Error ? caught.message : "Could not save.");
+      setSaveError(caught instanceof Error ? caught.message : "Failed to save.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  const isDraftDirty =
-    (draft.receiptDate || null) !== document.receiptDate ||
-    (draft.receiptPurpose.trim() || null) !== document.receiptPurpose ||
-    draft.receiptType !== (document.receiptType ?? "reimbursable") ||
-    draft.receiptCurrency !== (document.receiptCurrency ?? "EUR") ||
-    (draft.receiptAmount.trim() ? parseFloat(draft.receiptAmount) : null) !== document.receiptAmount;
+  const isDirty = isDraftDirty(draft, document);
 
   return (
-    <div className={`receipt-row${document.isReceipt ? " is-receipt" : ""}`}>
-      <div className="receipt-row-header">
+    <div className="receipt-row is-receipt">
+      {/* Summary row — always visible */}
+      <div className="receipt-row-header" onClick={() => setIsExpanded((e) => !e)} style={{ cursor: "pointer" }}>
         <span className="receipt-filename">{documentLabel(document)}</span>
+        <span className="receipt-summary">
+          {document.receiptPurpose && <span className="receipt-summary-purpose">{document.receiptPurpose}</span>}
+          {document.receiptDate && <span className="receipt-summary-date">{document.receiptDate}</span>}
+          {document.receiptAmount != null && (
+            <span className="receipt-summary-amount">
+              {document.receiptAmount.toFixed(2)} {document.receiptCurrency ?? ""}
+            </span>
+          )}
+          {document.receiptType && (
+            <span className={`receipt-type-badge ${document.receiptType}`}>
+              {document.receiptType === "reimbursable" ? "Reimbursable" : "Report only"}
+            </span>
+          )}
+        </span>
         <button
           type="button"
-          className={`receipt-toggle${document.isReceipt ? " active" : ""}`}
-          onClick={toggleReceipt}
+          className="receipt-remove-btn"
+          onClick={(e) => { e.stopPropagation(); void remove(); }}
           disabled={isSaving}
-          title={document.isReceipt ? "Remove as receipt" : "Mark as receipt"}
+          title="Demote to booking document"
         >
-          {document.isReceipt ? "Receipt ✓" : "Mark as receipt"}
+          <X size={14} />
         </button>
       </div>
 
-      {document.isReceipt && (
+      {/* Edit form — expanded on click */}
+      {isExpanded && (
         <div className="receipt-fields">
           <label className="receipt-field">
             <span>Date</span>
-            <input
-              type="date"
-              value={draft.receiptDate}
-              onChange={(e) => setDraft({ ...draft, receiptDate: e.target.value })}
-            />
+            <input type="date" value={draft.receiptDate} onChange={(e) => setDraft({ ...draft, receiptDate: e.target.value })} />
           </label>
           <label className="receipt-field">
             <span>Purpose</span>
-            <input
-              type="text"
-              placeholder="e.g. Hotel booking"
-              value={draft.receiptPurpose}
-              onChange={(e) => setDraft({ ...draft, receiptPurpose: e.target.value })}
-            />
+            <input type="text" placeholder="e.g. hotel booking" value={draft.receiptPurpose} onChange={(e) => setDraft({ ...draft, receiptPurpose: e.target.value })} />
           </label>
-          <label className="receipt-field receipt-field-amount">
+          <label className="receipt-field">
             <span>Amount</span>
             <div className="receipt-amount-row">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={draft.receiptAmount}
-                onChange={(e) => setDraft({ ...draft, receiptAmount: e.target.value })}
-              />
-              <input
-                type="text"
-                className="receipt-currency"
-                maxLength={3}
-                placeholder="EUR"
-                value={draft.receiptCurrency}
-                onChange={(e) => setDraft({ ...draft, receiptCurrency: e.target.value.toUpperCase() })}
-              />
+              <input type="number" min="0" step="0.01" placeholder="0.00" value={draft.receiptAmount} onChange={(e) => setDraft({ ...draft, receiptAmount: e.target.value })} />
+              <input type="text" className="receipt-currency" maxLength={3} placeholder="EUR" value={draft.receiptCurrency} onChange={(e) => setDraft({ ...draft, receiptCurrency: e.target.value.toUpperCase() })} />
             </div>
           </label>
           <div className="receipt-field">
             <span>Type</span>
             <div className="receipt-type-toggle">
-              <button
-                type="button"
-                className={draft.receiptType === "reimbursable" ? "active" : ""}
-                onClick={() => setDraft({ ...draft, receiptType: "reimbursable" })}
-              >
-                Reimbursable
-              </button>
-              <button
-                type="button"
-                className={draft.receiptType === "report_only" ? "active" : ""}
-                onClick={() => setDraft({ ...draft, receiptType: "report_only" })}
-              >
-                Report only
-              </button>
+              <button type="button" className={draft.receiptType === "reimbursable" ? "active" : ""} onClick={() => setDraft({ ...draft, receiptType: "reimbursable" })}>Reimbursable</button>
+              <button type="button" className={draft.receiptType === "report_only" ? "active" : ""} onClick={() => setDraft({ ...draft, receiptType: "report_only" })}>Report only</button>
             </div>
           </div>
           {saveError && <div className="inline-error">{saveError}</div>}
           <div className="receipt-save-row">
-            <button
-              type="button"
-              className="primary-button"
-              onClick={saveDraft}
-              disabled={!isDraftDirty || isSaving}
-            >
+            <button type="button" className="secondary-button" onClick={() => onOpenDocument(document.id)}>
+              <FileUp size={14} />
+              Open
+            </button>
+            <button type="button" className="secondary-button" onClick={() => setIsExpanded(false)}>Cancel</button>
+            <button type="button" className="primary-button" onClick={save} disabled={!isDirty || isSaving}>
               {isSaving ? <LoaderCircle className="button-spinner" size={16} aria-hidden="true" /> : <Check size={16} />}
-              {isSaving ? "Saving" : isDraftDirty ? "Save" : "Saved"}
+              {isSaving ? "Saving…" : isDirty ? "Save" : "Saved"}
             </button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/** Buchungsbeleg — zeigt Dateiname + extrahierten Betrag; Button zum Hochstufen als Zahlungsbeleg */
+function BuchungsbelegRow({
+  document,
+  onUpdate,
+  onOpenDocument,
+}: {
+  document: DocumentRecord;
+  onUpdate: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
+  onOpenDocument: (documentId: string) => void;
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function promote() {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onUpdate(document.id, { isReceipt: true });
+    } catch (caught) {
+      setSaveError(caught instanceof Error ? caught.message : "Failed to save.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="receipt-row">
+      <div className="receipt-row-header">
+        <span className="receipt-filename">{documentLabel(document)}</span>
+        {document.receiptAmount != null && (
+          <span className="receipt-extracted-amount">
+            {document.receiptAmount.toFixed(2)} {document.receiptCurrency ?? ""}
+          </span>
+        )}
+        {saveError && <span className="inline-error">{saveError}</span>}
+        <button
+          type="button"
+          className="receipt-open-btn"
+          onClick={() => onOpenDocument(document.id)}
+          title="Open document"
+        >
+          <FileUp size={13} />
+        </button>
+        <button
+          type="button"
+          className="receipt-promote-btn"
+          onClick={promote}
+          disabled={isSaving}
+        >
+          {isSaving ? <LoaderCircle size={13} className="button-spinner" /> : null}
+          Mark as receipt
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface ReceiptDraft {
+  receiptDate: string;
+  receiptPurpose: string;
+  receiptAmount: string;
+  receiptCurrency: string;
+  receiptType: "reimbursable" | "report_only";
+}
+
+function draftFromDocument(doc: DocumentRecord): ReceiptDraft {
+  return {
+    receiptDate: doc.receiptDate ?? "",
+    receiptPurpose: doc.receiptPurpose ?? "",
+    receiptAmount: doc.receiptAmount?.toString() ?? "",
+    receiptCurrency: doc.receiptCurrency ?? "EUR",
+    receiptType: doc.receiptType ?? "reimbursable",
+  };
+}
+
+function isDraftDirty(draft: ReceiptDraft, doc: DocumentRecord): boolean {
+  const amount = draft.receiptAmount.trim() ? parseFloat(draft.receiptAmount) : null;
+  return (
+    (draft.receiptDate || null) !== doc.receiptDate ||
+    (draft.receiptPurpose.trim() || null) !== doc.receiptPurpose ||
+    draft.receiptType !== (doc.receiptType ?? "reimbursable") ||
+    draft.receiptCurrency !== (doc.receiptCurrency ?? "EUR") ||
+    (Number.isFinite(amount) ? amount : null) !== doc.receiptAmount
   );
 }
 

@@ -35,8 +35,12 @@ export function errorResponse(error: unknown): Response {
   }
 
   if (error instanceof Error) {
+    console.error("[API error]", error);
     return jsonResponse({ error: error.message }, { status: 400 });
   }
 
-  return jsonResponse({ error: "Unexpected server error." }, { status: 500 });
+  // Non-Error thrown value — log it so the cause is visible in the terminal
+  const message = error !== null && error !== undefined ? String(error) : "Unexpected server error.";
+  console.error("[API unexpected error]", error);
+  return jsonResponse({ error: message }, { status: 500 });
 }

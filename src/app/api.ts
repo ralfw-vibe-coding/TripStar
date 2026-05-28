@@ -150,6 +150,18 @@ export function updateDocument(documentId: string, input: UpdateDocumentInput): 
   });
 }
 
+export function uploadTripDocument(input: {
+  base64: string;
+  originalFileName: string;
+  mimeType: string;
+  tripId: string;
+}): Promise<DocumentRecord> {
+  return requestJson<DocumentRecord>("/api/documents/trip-upload", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function fetchDocumentOriginal(documentId: string): Promise<{
   id: string;
   originalFileName: string | null;
