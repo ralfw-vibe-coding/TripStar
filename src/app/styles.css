@@ -905,6 +905,13 @@ textarea:disabled {
   resize: vertical;
 }
 
+.field-label input.readonly-field {
+  background: #f5f7f9;
+  color: #667085;
+  cursor: default;
+  border-color: #e2e8ed;
+}
+
 .details-text {
   line-height: 1.5;
   margin: 0;

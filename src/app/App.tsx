@@ -1376,14 +1376,24 @@ function BookingCard({
             </div>
             <label className="field-label">
               Trip
-              <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
-                <option value="">Inbox / no trip</option>
-                {assignableTrips.map((trip) => (
-                  <option key={trip.id} value={trip.id}>
-                    {trip.title} #{trip.tripNumber}
-                  </option>
-                ))}
-              </select>
+              {booking.tripId !== null && !assignableTrips.some((t) => t.id === booking.tripId) ? (
+                <input
+                  type="text"
+                  readOnly
+                  value={fullTrip ? `${fullTrip.title} #${fullTrip.tripNumber}` : booking.tripId}
+                  className="readonly-field"
+                  title="You cannot reassign this booking — you are not the trip owner."
+                />
+              ) : (
+                <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
+                  <option value="">Inbox / no trip</option>
+                  {assignableTrips.map((trip) => (
+                    <option key={trip.id} value={trip.id}>
+                      {trip.title} #{trip.tripNumber}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
             {booking.sourceDocumentId && (
               <button type="button" className="secondary-button document-link" onClick={() => onOpenDocument(booking.sourceDocumentId!)}>
