@@ -29,7 +29,7 @@ describe("sendOtpEmail", () => {
     expect(body).toMatchObject({
       from: "TripStar <login@example.com>",
       to: "ralf@example.com",
-      subject: "Your TripStar login code",
+      subject: "Your TripStar sign-in code",
     });
     expect(body.text).toContain("123456");
   });

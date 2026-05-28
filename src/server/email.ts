@@ -23,8 +23,24 @@ export async function sendOtpEmail(input: OtpEmailInput): Promise<void> {
     body: JSON.stringify({
       from,
       to: input.to,
-      subject: "Your TripStar login code",
-      text: `Your TripStar login code is ${input.otp}.\n\nIt expires at ${new Date(input.expiresAt).toLocaleString("de-DE")}.`,
+      subject: "Your TripStar sign-in code",
+      text: [
+        "Your TripStar sign-in code:",
+        "",
+        input.otp,
+        "",
+        `This code expires at ${new Date(input.expiresAt).toLocaleString("de-DE")}.`,
+      ].join("\n"),
+      html: `
+        <div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:32px 24px;color:#18212f">
+          <p style="margin:0 0 16px">Your TripStar sign-in code:</p>
+          <p style="margin:24px 0;font-size:36px;font-weight:700;letter-spacing:8px;text-align:center;
+                     background:#f3f4f6;border-radius:8px;padding:16px 0">${input.otp}</p>
+          <p style="margin:16px 0 0;font-size:13px;color:#6b7280">
+            This code expires at ${new Date(input.expiresAt).toLocaleString("de-DE")}.
+          </p>
+        </div>
+      `.trim(),
     }),
   });
 

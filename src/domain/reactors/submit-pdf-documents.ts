@@ -108,7 +108,7 @@ function createPdfDocument(
     sourceType: "upload",
     sourceEmailIngestId: null,
     extractedText: null,
-    isReceipt: receiptInfo?.isReceipt ?? false,
+    isReceipt: false, // only set to true by explicit user action in TripRep
     receiptAmount: receiptInfo?.receiptAmount ?? null,
     receiptCurrency: receiptInfo?.receiptCurrency ?? null,
     receiptDate: receiptInfo?.receiptDate ?? null,

@@ -68,7 +68,7 @@ export async function submitImageDocument(
     sourceType: "screenshot",
     sourceEmailIngestId: null,
     extractedText: null,
-    isReceipt: receiptInfo.isReceipt,
+    isReceipt: false, // only set to true by explicit user action in TripRep
     receiptAmount: receiptInfo.receiptAmount,
     receiptCurrency: receiptInfo.receiptCurrency,
     receiptDate: receiptInfo.receiptDate,

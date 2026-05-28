@@ -318,7 +318,8 @@ export function App() {
     setView({ ...view, bookings: view.bookings.filter((candidate) => candidate.id !== booking.id) });
     try {
       await deleteBooking(booking.id);
-      await reloadCalendar();
+      const [updatedDocs] = await Promise.all([fetchDocuments(), reloadCalendar()]);
+      setDocuments(updatedDocs);
     } catch (caught) {
       setView(previousView);
       setError(caught instanceof Error ? caught.message : "Booking could not be deleted.");
@@ -368,7 +369,13 @@ export function App() {
         ),
       );
     } catch (caught) {
-      setDocuments(previousDocuments);
+      const msg = caught instanceof Error ? caught.message : "";
+      if (msg.toLowerCase().includes("not found")) {
+        // Document no longer exists on the server — refresh instead of restoring stale state
+        fetchDocuments().then(setDocuments).catch(() => undefined);
+      } else {
+        setDocuments(previousDocuments);
+      }
       throw caught;
     }
   }
@@ -500,6 +507,7 @@ export function App() {
         ) : (
           <ReportsPanel
             trips={ownTrips}
+            bookings={view?.bookings ?? []}
             documents={documents}
             isDocumentsLoading={isDocumentsLoading}
             onRefresh={reloadCalendar}
@@ -604,44 +612,50 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
           <form className="auth-form" onSubmit={handleRequestOtp}>
             <h2>Sign in</h2>
             <label className="field-label">
-              Email *
+              Email
               <input
                 type="email"
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </label>
             {error && <div className="notice">{error}</div>}
             <button className="primary-button" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Sending" : "Send OTP"}
+              {isSubmitting
+                ? <><LoaderCircle size={15} className="button-spinner" aria-hidden="true" /> Sending…</>
+                : "Send code for login"}
             </button>
           </form>
         ) : (
           <form className="auth-form" onSubmit={handleVerifyOtp}>
-            <h2>Enter OTP</h2>
-            <p className="muted-small">{email}</p>
-            {devOtp && <div className="dev-otp">Local OTP: {devOtp}</div>}
+            <h2>Check your inbox</h2>
+            <p className="auth-hint">
+              We sent a sign-in code to <strong>{email}</strong>. Enter it below.
+            </p>
+            {devOtp && <div className="dev-otp">Local code: {devOtp}</div>}
             <label className="field-label">
-              OTP *
+              Code
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 value={otp}
                 onChange={(event) => setOtp(event.target.value)}
                 required
+                autoFocus
               />
             </label>
             {error && <div className="notice">{error}</div>}
-            <div className="dialog-actions">
-              <button className="secondary-button" type="button" onClick={() => setStep("email")}>
-                Back
-              </button>
-              <button className="primary-button" type="submit" disabled={isSubmitting}>
-                Sign in
-              </button>
-            </div>
+            <button className="primary-button" type="submit" disabled={isSubmitting}>
+              {isSubmitting
+                ? <><LoaderCircle size={15} className="button-spinner" aria-hidden="true" /> Signing in…</>
+                : "Sign in"}
+            </button>
+            <button type="button" className="auth-back-link" onClick={() => { setStep("email"); setError(null); setOtp(""); }}>
+              ← Try a different email
+            </button>
           </form>
         )}
       </section>
@@ -1938,6 +1952,7 @@ function TripDialog({
 
 function ReportsPanel({
   trips,
+  bookings,
   documents,
   isDocumentsLoading,
   onRefresh,
@@ -1946,6 +1961,7 @@ function ReportsPanel({
   onUploadDocument,
 }: {
   trips: Trip[];
+  bookings: CalendarBooking[];
   documents: DocumentRecord[];
   isDocumentsLoading: boolean;
   onRefresh: () => void;
@@ -1967,7 +1983,8 @@ function ReportsPanel({
           <TripReport
             key={trip.id}
             trip={trip}
-            documents={documents.filter((d) => d.tripId === trip.id)}
+            bookings={bookings}
+            documents={documents}
             isDocumentsLoading={isDocumentsLoading}
             onRefresh={onRefresh}
             onUpdateDocument={onUpdateDocument}
@@ -2003,6 +2020,7 @@ function formatDayLabel(dateStr: string): string {
 
 function TripReport({
   trip,
+  bookings,
   documents,
   isDocumentsLoading,
   onRefresh: _onRefresh,
@@ -2011,6 +2029,7 @@ function TripReport({
   onUploadDocument,
 }: {
   trip: Trip;
+  bookings: CalendarBooking[];
   documents: DocumentRecord[];
   isDocumentsLoading: boolean;
   onRefresh: () => void;
@@ -2073,11 +2092,24 @@ function TripReport({
     }
   }
 
-  const receipts = documents.filter((d) => d.isReceipt);
-  const reimbursableTotal = receipts
+  // Receipts: manually included via direct tripId assignment
+  const receiptDocs = documents.filter((d) => d.tripId === trip.id && d.isReceipt);
+  // Booking documents: linked indirectly via a booking in this trip, excluding already-shown receipts
+  const receiptDocIds = new Set(receiptDocs.map((d) => d.id));
+  const tripBookingDocIds = new Set(
+    bookings
+      .filter((b) => b.tripId === trip.id && b.sourceDocumentId)
+      .map((b) => b.sourceDocumentId!),
+  );
+  // Also include documents uploaded directly to this trip but not yet promoted to receipts
+  const bookingLinkedDocs = documents.filter(
+    (d) => (tripBookingDocIds.has(d.id) || (d.tripId === trip.id && !d.isReceipt)) && !receiptDocIds.has(d.id),
+  );
+
+  const reimbursableTotal = receiptDocs
     .filter((d) => d.receiptType === "reimbursable")
     .reduce((sum, d) => sum + (d.receiptAmount ?? 0), 0);
-  const reportOnlyTotal = receipts
+  const reportOnlyTotal = receiptDocs
     .filter((d) => d.receiptType === "report_only")
     .reduce((sum, d) => sum + (d.receiptAmount ?? 0), 0);
   const grandTotal = allowancesTotal + reimbursableTotal;
@@ -2206,19 +2238,19 @@ function TripReport({
 
         {/* ── Payment receipts ── */}
         <h3 className="receipt-section-title">Payment receipts</h3>
-        {isDocumentsLoading && documents.length === 0 ? (
+        {isDocumentsLoading && receiptDocs.length === 0 && bookingLinkedDocs.length === 0 ? (
           <p className="muted-small">Loading documents…</p>
-        ) : receipts.length === 0 ? (
+        ) : receiptDocs.length === 0 ? (
           <p className="muted-small">No payment receipts yet — mark a booking document below as a payment receipt.</p>
         ) : (
           <div className="receipt-list">
-            {receipts.map((doc) => (
-              <ZahlungsbelegRow key={doc.id} document={doc} onUpdate={onUpdateDocument} onOpenDocument={onOpenDocument} />
+            {receiptDocs.map((doc) => (
+              <ZahlungsbelegRow key={doc.id} document={doc} tripId={trip.id} isDirectUpload={!tripBookingDocIds.has(doc.id)} onUpdate={onUpdateDocument} onOpenDocument={onOpenDocument} />
             ))}
           </div>
         )}
 
-        {receipts.length > 0 && (
+        {receiptDocs.length > 0 && (
           <div className="receipt-totals">
             {reimbursableTotal > 0 && (
               <span className="receipt-total-item">
@@ -2240,12 +2272,12 @@ function TripReport({
         )}
 
         {/* ── Booking documents ── */}
-        {documents.filter((d) => !d.isReceipt).length > 0 && (
+        {bookingLinkedDocs.length > 0 && (
           <>
             <h3 className="receipt-section-title" style={{ marginTop: 16 }}>Booking documents</h3>
             <div className="receipt-list">
-              {documents.filter((d) => !d.isReceipt).map((doc) => (
-                <BuchungsbelegRow key={doc.id} document={doc} onUpdate={onUpdateDocument} onOpenDocument={onOpenDocument} />
+              {bookingLinkedDocs.map((doc) => (
+                <BuchungsbelegRow key={doc.id} document={doc} tripId={trip.id} onUpdate={onUpdateDocument} onOpenDocument={onOpenDocument} />
               ))}
             </div>
           </>
@@ -2291,10 +2323,15 @@ function documentLabel(doc: DocumentRecord): string {
 /** Dokument, das als Zahlungsbeleg markiert ist — zeigt alle Felder, aufklappbar zum Bearbeiten */
 function ZahlungsbelegRow({
   document,
+  tripId,
+  isDirectUpload,
   onUpdate,
   onOpenDocument,
 }: {
   document: DocumentRecord;
+  tripId: string;
+  /** True when the document was uploaded directly to TripRep (no booking links it) — tripId is permanent. */
+  isDirectUpload: boolean;
   onUpdate: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
   onOpenDocument: (documentId: string) => void;
 }) {
@@ -2310,7 +2347,8 @@ function ZahlungsbelegRow({
   async function remove() {
     setIsSaving(true);
     try {
-      await onUpdate(document.id, { isReceipt: false });
+      // Direct uploads keep their tripId permanently; booking-linked docs lose it when de-listed
+      await onUpdate(document.id, isDirectUpload ? { isReceipt: false } : { isReceipt: false, tripId: null });
     } catch (caught) {
       setSaveError(caught instanceof Error ? caught.message : "Failed to save.");
     } finally {
@@ -2418,10 +2456,12 @@ function ZahlungsbelegRow({
 /** Buchungsbeleg — zeigt Dateiname + extrahierten Betrag; Button zum Hochstufen als Zahlungsbeleg */
 function BuchungsbelegRow({
   document,
+  tripId,
   onUpdate,
   onOpenDocument,
 }: {
   document: DocumentRecord;
+  tripId: string;
   onUpdate: (docId: string, input: Partial<DocumentRecord>) => Promise<void>;
   onOpenDocument: (documentId: string) => void;
 }) {
@@ -2432,7 +2472,7 @@ function BuchungsbelegRow({
     setIsSaving(true);
     setSaveError(null);
     try {
-      await onUpdate(document.id, { isReceipt: true });
+      await onUpdate(document.id, { isReceipt: true, tripId });
     } catch (caught) {
       setSaveError(caught instanceof Error ? caught.message : "Failed to save.");
     } finally {
@@ -2443,12 +2483,23 @@ function BuchungsbelegRow({
   return (
     <div className="receipt-row">
       <div className="receipt-row-header">
-        <span className="receipt-filename">{documentLabel(document)}</span>
-        {document.receiptAmount != null && (
-          <span className="receipt-extracted-amount">
-            {document.receiptAmount.toFixed(2)} {document.receiptCurrency ?? ""}
+        <div className="receipt-col-info">
+          <span className="receipt-col-name">{documentLabel(document)}</span>
+          <span className="receipt-col-date">{document.receiptDate ?? ""}</span>
+          <span className="receipt-col-purpose">{document.receiptPurpose ?? ""}</span>
+          <span className="receipt-col-badge">
+            {document.receiptType && (
+              <span className={`receipt-type-badge ${document.receiptType}`}>
+                {document.receiptType === "reimbursable" ? "Reimbursable" : "Report only"}
+              </span>
+            )}
           </span>
-        )}
+          <span className="receipt-col-amount">
+            {document.receiptAmount != null
+              ? `${document.receiptAmount.toFixed(2)} ${document.receiptCurrency ?? ""}`
+              : ""}
+          </span>
+        </div>
         {saveError && <span className="inline-error">{saveError}</span>}
         <button
           type="button"

@@ -38,8 +38,14 @@ export async function deleteBooking(provider: TripStarStateProvider, bookingId: 
       (candidate) => candidate.sourceDocumentId === booking.sourceDocumentId,
     );
     if (remainingDocumentBookings.length === 0) {
-      await provider.deleteDocument(booking.sourceDocumentId);
-      deletedDocumentId = booking.sourceDocumentId;
+      const document = (await provider.listDocuments()).find((d) => d.id === booking.sourceDocumentId);
+      // Receipts have independent value in TripRep — keep them even without bookings
+      // Receipts have independent value in TripRep — their tripId is managed there,
+      // not by the booking relationship.
+      if (!document?.isReceipt) {
+        await provider.deleteDocument(booking.sourceDocumentId);
+        deletedDocumentId = booking.sourceDocumentId;
+      }
     }
   }
 

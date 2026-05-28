@@ -90,6 +90,20 @@ describe("booking RPUs", () => {
     await expect(provider.listDocuments()).resolves.toEqual([]);
   });
 
+  it("keeps a receipt document when its last booking is deleted", async () => {
+    const receiptDocument = { ...document, isReceipt: true };
+    const provider = new LocalStateProvider({
+      bookings: [{ ...booking, sourceDocumentId: "document_1" }],
+      documents: [receiptDocument],
+    });
+
+    const result = await deleteBooking(provider, "booking_1");
+
+    expect(result.deletedDocumentId).toBeNull();
+    await expect(provider.listBookings()).resolves.toEqual([]);
+    await expect(provider.listDocuments()).resolves.toHaveLength(1);
+  });
+
   it("keeps the source document when other bookings still reference it", async () => {
     const provider = new LocalStateProvider({
       bookings: [

@@ -60,6 +60,27 @@ button {
   font-size: 24px;
 }
 
+.auth-hint {
+  margin: 0;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.auth-back-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: #7a8a95;
+  cursor: pointer;
+  text-align: center;
+}
+
+.auth-back-link:hover {
+  color: #2563eb;
+}
+
 .dev-otp {
   padding: 10px 12px;
   border-radius: 8px;

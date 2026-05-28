@@ -64,7 +64,7 @@ export async function submitTextDocument(
     sourceType: "text_input",
     sourceEmailIngestId: null,
     extractedText: text,
-    isReceipt: receiptInfo.isReceipt,
+    isReceipt: false, // only set to true by explicit user action in TripRep
     receiptAmount: receiptInfo.receiptAmount,
     receiptCurrency: receiptInfo.receiptCurrency,
     receiptDate: receiptInfo.receiptDate,
