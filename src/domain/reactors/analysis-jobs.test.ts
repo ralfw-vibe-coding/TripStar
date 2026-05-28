@@ -23,6 +23,9 @@ function createStorage(): DocumentStorageProvider {
     async readDocument() {
       return { base64: "dGVzdA==" };
     },
+    async storeBuffer() {
+      throw new Error("not used");
+    },
   };
 }
 

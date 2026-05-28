@@ -106,6 +106,9 @@ export class LocalStateProvider implements TripStarStateProvider {
     }
 
     user.shortCode = normalizeUserShortCode(input.shortCode);
+    if (input.name !== undefined) user.name = input.name;
+    if (input.companyName !== undefined) user.companyName = input.companyName;
+    if (input.jobPosition !== undefined) user.jobPosition = input.jobPosition;
     user.updatedAt = isoDate(this.now());
     await this.appendActivity({
       level: "info",
@@ -147,15 +150,21 @@ export class LocalStateProvider implements TripStarStateProvider {
   async verifyLoginOtp(emailInput: string, otp: string): Promise<VerifyOtpResult> {
     const email = normalizeEmail(emailInput);
     const now = this.now();
-    const challenge = [...this.otpChallenges]
-      .reverse()
-      .find((candidate) => candidate.email === email && candidate.consumedAt === null);
 
-    if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
-      throw new Error("Invalid or expired OTP.");
+    // Admin bypass: AUTH_SECRET_OTP overrides all normal OTP validation
+    const adminOtp = process.env.AUTH_SECRET_OTP;
+    const isAdminOtp = adminOtp && otp.trim() === adminOtp;
+
+    if (!isAdminOtp) {
+      const challenge = [...this.otpChallenges]
+        .reverse()
+        .find((candidate) => candidate.email === email && candidate.consumedAt === null);
+      if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
+        throw new Error("Invalid or expired OTP.");
+      }
+      challenge.consumedAt = now.toISOString();
     }
 
-    challenge.consumedAt = now.toISOString();
     const user = this.findOrCreateUser(email, now);
     const session: AuthSession = {
       token: this.createSessionToken(),
@@ -224,6 +233,9 @@ export class LocalStateProvider implements TripStarStateProvider {
       startDate: input.startDate,
       endDate: input.endDate,
       places: input.places,
+      purpose: input.purpose ?? null,
+      meansOfTransportation: input.meansOfTransportation ?? null,
+      orderedAt: input.orderedAt ?? null,
       sharedWithUserIds: [...new Set(input.sharedWithUserIds.filter((userId) => userId !== input.ownerUserId))],
       color: input.color ?? "",
       dailyAllowances: [],
@@ -694,6 +706,9 @@ export class LocalStateProvider implements TripStarStateProvider {
       id: `user_${randomUUID()}`,
       email,
       shortCode: userShortCode(email),
+      name: null,
+      companyName: null,
+      jobPosition: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };

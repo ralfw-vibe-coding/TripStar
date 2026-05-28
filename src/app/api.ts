@@ -102,7 +102,7 @@ export function logout(): Promise<{ ok: true }> {
   return requestJson("/api/auth/logout", { method: "POST", body: JSON.stringify({}) });
 }
 
-export function updateProfile(input: { shortCode: string }): Promise<{ user: User }> {
+export function updateProfile(input: { shortCode: string; name?: string | null; companyName?: string | null; jobPosition?: string | null }): Promise<{ user: User }> {
   return requestJson("/api/auth/profile", {
     method: "PATCH",
     body: JSON.stringify(input),
@@ -160,6 +160,10 @@ export function uploadTripDocument(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export function generateTripReport(tripId: string): Promise<{ ok: boolean }> {
+  return requestJson(`/api/trips/${tripId}/report`, { method: "POST" });
 }
 
 export function fetchDocumentOriginal(documentId: string): Promise<{

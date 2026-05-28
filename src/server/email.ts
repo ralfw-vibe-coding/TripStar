@@ -4,6 +4,13 @@ export interface OtpEmailInput {
   expiresAt: string;
 }
 
+export interface ReportReadyEmailInput {
+  to: string;
+  tripNumber: string;
+  tripTitle: string;
+  downloadUrl: string;
+}
+
 export interface IngestErrorEmailInput {
   to: string;
   errorMessage: string;
@@ -48,6 +55,42 @@ export async function sendOtpEmail(input: OtpEmailInput): Promise<void> {
     const body = await response.text().catch(() => "");
     throw new Error(`Could not send OTP email: ${response.status} ${body}`);
   }
+}
+
+export async function sendReportReadyEmail(input: ReportReadyEmailInput): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.AUTH_FROM_EMAIL;
+  if (!apiKey || !from) return;
+
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      from,
+      to: input.to,
+      subject: `TripStar: Report for Trip #${input.tripNumber} ready`,
+      text: [
+        `Your report for Trip #${input.tripNumber} — ${input.tripTitle} is ready.`,
+        "",
+        `Download: ${input.downloadUrl}`,
+        "",
+        "The link can be forwarded directly to your tax advisor.",
+      ].join("\n"),
+      html: `
+        <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px 24px;color:#18212f">
+          <p style="margin:0 0 8px">Your report is ready:</p>
+          <p style="margin:0 0 20px;font-weight:700">Trip #${input.tripNumber} — ${input.tripTitle}</p>
+          <a href="${input.downloadUrl}"
+             style="display:inline-block;padding:12px 24px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Download report (ZIP)
+          </a>
+          <p style="margin:20px 0 0;font-size:13px;color:#6b7280">
+            You can forward this email or the link directly to your tax advisor.
+          </p>
+        </div>
+      `.trim(),
+    }),
+  });
 }
 
 export async function sendIngestErrorEmail(input: IngestErrorEmailInput): Promise<void> {

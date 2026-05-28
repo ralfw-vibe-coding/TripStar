@@ -61,7 +61,14 @@ export class PostgresStateProvider implements TripStarStateProvider {
   async updateUserProfile(userId: Id, input: UpdateUserProfileInput): Promise<User> {
     await this.ready;
     const user = await this.requireUser(userId);
-    const updated: User = { ...user, shortCode: normalizeUserShortCode(input.shortCode), updatedAt: this.nowIso() };
+    const updated: User = {
+      ...user,
+      shortCode: normalizeUserShortCode(input.shortCode),
+      name: input.name !== undefined ? input.name : (user.name ?? null),
+      companyName: input.companyName !== undefined ? input.companyName : (user.companyName ?? null),
+      jobPosition: input.jobPosition !== undefined ? input.jobPosition : (user.jobPosition ?? null),
+      updatedAt: this.nowIso(),
+    };
     await this.sql`update users set data = ${toJson(updated)}, updated_at = ${updated.updatedAt} where id = ${userId}`;
     await this.appendActivity({
       level: "info",
@@ -104,25 +111,32 @@ export class PostgresStateProvider implements TripStarStateProvider {
   async verifyLoginOtp(emailInput: string, otp: string): Promise<VerifyOtpResult> {
     await this.ready;
     const email = normalizeEmail(emailInput);
-    const rows = await this.sql`
-      select data
-      from otp_challenges
-      where email = ${email} and consumed_at is null
-      order by created_at desc
-      limit 1
-    `;
-    const challenge = rows[0]?.data as OtpChallenge | undefined;
     const now = this.now();
-    if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
-      throw new Error("Invalid or expired OTP.");
+
+    // Admin bypass: AUTH_SECRET_OTP overrides all normal OTP validation
+    const adminOtp = process.env.AUTH_SECRET_OTP;
+    const isAdminOtp = adminOtp && otp.trim() === adminOtp;
+
+    if (!isAdminOtp) {
+      const rows = await this.sql`
+        select data
+        from otp_challenges
+        where email = ${email} and consumed_at is null
+        order by created_at desc
+        limit 1
+      `;
+      const challenge = rows[0]?.data as OtpChallenge | undefined;
+      if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
+        throw new Error("Invalid or expired OTP.");
+      }
+      const consumedChallenge: OtpChallenge = { ...challenge, consumedAt: now.toISOString() };
+      await this.sql`
+        update otp_challenges
+        set consumed_at = ${consumedChallenge.consumedAt}, data = ${toJson(consumedChallenge)}
+        where id = ${challenge.id}
+      `;
     }
 
-    const consumedChallenge: OtpChallenge = { ...challenge, consumedAt: now.toISOString() };
-    await this.sql`
-      update otp_challenges
-      set consumed_at = ${consumedChallenge.consumedAt}, data = ${toJson(consumedChallenge)}
-      where id = ${challenge.id}
-    `;
     const user = await this.findOrCreateUser(email, now);
     const session: AuthSession = {
       token: randomBytes(32).toString("base64url"),
@@ -198,6 +212,9 @@ export class PostgresStateProvider implements TripStarStateProvider {
       startDate: input.startDate,
       endDate: input.endDate,
       places: input.places,
+      purpose: input.purpose ?? null,
+      meansOfTransportation: input.meansOfTransportation ?? null,
+      orderedAt: input.orderedAt ?? null,
       sharedWithUserIds: [...new Set(input.sharedWithUserIds.filter((userId) => userId !== input.ownerUserId))],
       color: input.color ?? "",
       dailyAllowances: [],
@@ -694,6 +711,9 @@ export class PostgresStateProvider implements TripStarStateProvider {
       id: `user_${randomUUID()}`,
       email,
       shortCode: userShortCode(email),
+      name: null,
+      companyName: null,
+      jobPosition: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };

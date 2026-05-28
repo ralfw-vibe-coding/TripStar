@@ -7,6 +7,9 @@ export interface CreateTripInput {
   startDate: string;
   endDate: string;
   places: string;
+  purpose?: string | null;
+  meansOfTransportation?: string | null;
+  orderedAt?: string | null;
   sharedWithUserIds: Id[];
   color?: string;
 }
@@ -17,6 +20,9 @@ export interface UpdateTripInput {
   startDate?: string;
   endDate?: string;
   places?: string;
+  purpose?: string | null;
+  meansOfTransportation?: string | null;
+  orderedAt?: string | null;
   sharedWithUserIds?: Id[];
   color?: string;
   dailyAllowances?: import("../model").DailyAllowance[];
@@ -112,6 +118,9 @@ export interface VerifyOtpResult {
 
 export interface UpdateUserProfileInput {
   shortCode: string;
+  name?: string | null;
+  companyName?: string | null;
+  jobPosition?: string | null;
 }
 
 export interface TripStarStateProvider {

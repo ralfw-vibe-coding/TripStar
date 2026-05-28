@@ -23,6 +23,9 @@ function createStorage(): DocumentStorageProvider {
     async readDocument() {
       throw new Error("not used");
     },
+    async storeBuffer() {
+      throw new Error("not used");
+    },
   };
 }
 

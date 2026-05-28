@@ -17,6 +17,9 @@ export interface User {
   id: Id;
   email: string;
   shortCode: string;
+  name: string | null;
+  companyName: string | null;
+  jobPosition: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +57,9 @@ export interface Trip {
   startDate: string;
   endDate: string;
   places: string;
+  purpose: string | null;
+  meansOfTransportation: string | null;
+  orderedAt: string | null;
   sharedWithUserIds: Id[];
   color: string;
   dailyAllowances: DailyAllowance[];

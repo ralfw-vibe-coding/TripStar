@@ -13,10 +13,13 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1054.0",
+    "@fontsource/noto-sans": "^5.2.10",
     "@neondatabase/serverless": "^1.1.0",
     "@netlify/functions": "^3.0.0",
     "@netlify/vite-plugin": "^2.0.0",
+    "@react-pdf/renderer": "^4.5.1",
     "@vitejs/plugin-react": "^5.0.0",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -25,6 +28,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
+    "@types/jszip": "^3.4.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",

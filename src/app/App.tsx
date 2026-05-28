@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   Check,
+  Download,
   FileUp,
   Hotel,
   Image as ImageIcon,
@@ -54,6 +55,7 @@ import {
   updateBooking,
   updateDocument as updateDocumentApi,
   uploadTripDocument,
+  generateTripReport as generateTripReportApi,
   updateProfile,
   updateTrip,
   verifyOtp,
@@ -166,6 +168,9 @@ export function App() {
         startDate: String(data.get("startDate")),
         endDate: String(data.get("endDate")),
         places: String(data.get("places")),
+        purpose: String(data.get("purpose") ?? "").trim() || null,
+        meansOfTransportation: String(data.get("meansOfTransportation") ?? "").trim() || null,
+        orderedAt: String(data.get("orderedAt") ?? "").trim() || null,
         sharedWithUserIds,
         ownerUserId: currentUser.id,
       });
@@ -197,6 +202,9 @@ export function App() {
         startDate: String(data.get("startDate")),
         endDate: String(data.get("endDate")),
         places: String(data.get("places")),
+        purpose: String(data.get("purpose") ?? "").trim() || null,
+        meansOfTransportation: String(data.get("meansOfTransportation") ?? "").trim() || null,
+        orderedAt: String(data.get("orderedAt") ?? "").trim() || null,
         sharedWithUserIds,
       });
       setView({
@@ -694,6 +702,9 @@ function TripList({ title, trips, onEdit }: { title: string; trips: Trip[]; onEd
 
 function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (user: User) => void }) {
   const [shortCode, setShortCode] = useState(user.shortCode);
+  const [name, setName] = useState(user.name ?? "");
+  const [companyName, setCompanyName] = useState(user.companyName ?? "");
+  const [jobPosition, setJobPosition] = useState(user.jobPosition ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -702,7 +713,12 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
     setError(null);
     setIsSaving(true);
     try {
-      const result = await updateProfile({ shortCode });
+      const result = await updateProfile({
+        shortCode,
+        name: name.trim() || null,
+        companyName: companyName.trim() || null,
+        jobPosition: jobPosition.trim() || null,
+      });
       onSave(result.user);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save profile.");
@@ -727,6 +743,21 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
         <label className="field-label">
           Code *
           <input value={shortCode} maxLength={3} onChange={(event) => setShortCode(event.target.value)} required />
+        </label>
+
+        <label className="field-label">
+          Full name *
+          <input value={name} onChange={(event) => setName(event.target.value)} required />
+        </label>
+
+        <label className="field-label">
+          Company name *
+          <input value={companyName} onChange={(event) => setCompanyName(event.target.value)} required />
+        </label>
+
+        <label className="field-label">
+          Job position *
+          <input value={jobPosition} onChange={(event) => setJobPosition(event.target.value)} required />
         </label>
 
         {error && <div className="notice">{error}</div>}
@@ -1887,13 +1918,14 @@ function TripDialog({
 
         <div className="title-number-grid">
           <label className="field-label">
-            Title
-            <input name="title" placeholder="Trip number if empty" defaultValue={trip?.title ?? ""} />
+            Title *
+            <input name="title" required defaultValue={trip?.title ?? ""} />
           </label>
           <label className="field-label">
-            Number
+            Number *
             <input
               name="tripNumber"
+              required
               defaultValue={isEditing ? trip.tripNumber : suggestedTripNumber}
               style={{ fontVariantNumeric: "tabular-nums" }}
             />
@@ -1913,7 +1945,22 @@ function TripDialog({
 
         <label className="field-label">
           Places *
-          <input name="places" placeholder="San Francisco, Palo Alto" required defaultValue={trip?.places ?? ""} />
+          <input name="places" required defaultValue={trip?.places ?? ""} />
+        </label>
+
+        <label className="field-label">
+          Purpose *
+          <input name="purpose" required defaultValue={trip?.purpose ?? ""} />
+        </label>
+
+        <label className="field-label">
+          Means of transportation *
+          <input name="meansOfTransportation" required defaultValue={trip?.meansOfTransportation ?? ""} />
+        </label>
+
+        <label className="field-label">
+          Order date *
+          <input name="orderedAt" type="date" required defaultValue={trip?.orderedAt ?? ""} />
         </label>
 
         <fieldset className="user-picker">
@@ -2069,6 +2116,22 @@ function TripReport({
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
+
+  async function handleGenerateReport() {
+    setIsGeneratingReport(true);
+    setReportNotice(null);
+    try {
+      await generateTripReportApi(trip.id);
+      setReportNotice("Report generation started — you'll receive an email with the download link.");
+      setTimeout(() => setReportNotice(null), 30_000);
+    } catch (caught) {
+      setReportNotice(caught instanceof Error ? caught.message : "Could not start report generation.");
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
 
   async function handleUploadFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
@@ -2168,6 +2231,19 @@ function TripReport({
           <span className="trip-report-dates">
             {trip.startDate} – {trip.endDate}
           </span>
+        </div>
+        <div className="trip-report-actions">
+          {reportNotice && <span className="muted-small">{reportNotice}</span>}
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleGenerateReport}
+            disabled={isGeneratingReport}
+          >
+            {isGeneratingReport
+              ? <><LoaderCircle size={14} className="button-spinner" aria-hidden="true" /> Generating…</>
+              : <><Download size={14} /> Generate report</>}
+          </button>
         </div>
       </header>
 

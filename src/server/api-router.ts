@@ -9,6 +9,7 @@ import type { CreateTripInput, UpdateBookingInput, UpdateDocumentInput, UpdateTr
 import type { IngestPart } from "../domain/model";
 import { submitAnalysisJob } from "../domain/reactors/analysis-jobs";
 import { receiveIngestPart, queueIngestProcessing } from "../domain/reactors/ingest-email";
+import { generateTripReport } from "../domain/reactors/generate-trip-report";
 import { withUserId } from "../domain/providers/user-context";
 import { sendOtpEmail } from "./email";
 import { errorResponse, HttpError, jsonResponse, readJson } from "./http";
@@ -60,7 +61,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           return jsonResponse({ error: "Authentication required." }, { status: 401 });
         }
         return jsonResponse({
-          user: await provider.updateUserProfile(user.id, await readJson<{ shortCode: string }>(request)),
+          user: await provider.updateUserProfile(user.id, await readJson<{ shortCode: string; name?: string | null; companyName?: string | null; jobPosition?: string | null }>(request)),
         });
       }
 
@@ -90,6 +91,36 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       if (request.method === "PATCH" && segments.length === 2) {
         return jsonResponse(await updateTrip(provider, segments[1], await readJson<UpdateTripInput>(request)));
+      }
+
+      if (request.method === "POST" && segments.length === 3 && segments[2] === "report") {
+        if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        const tripId = segments[1];
+        const siteUrl = process.env.URL ?? `${new URL(request.url).origin}`;
+        await triggerReportGeneration(provider, tripId, currentUserId, siteUrl);
+        return jsonResponse({ ok: true }, { status: 202 });
+      }
+    }
+
+    // GET /api/reports/download/:tripNumber/:token
+    if (segments[0] === "reports" && segments.length === 4 && segments[1] === "download" && request.method === "GET") {
+      const tripNumber = decodeURIComponent(segments[2]);
+      const token = segments[3];
+      const storageKey = `reports/${token}.zip`;
+      try {
+        const { base64 } = await createDocumentStorageProvider().readDocument(storageKey);
+        const body = Buffer.from(base64, "base64");
+        const filename = `tripstar report #${tripNumber}.zip`;
+        return new Response(body, {
+          status: 200,
+          headers: {
+            "content-type": "application/zip",
+            "content-disposition": `attachment; filename="${filename}"`,
+            "content-length": String(body.length),
+          },
+        });
+      } catch {
+        return jsonResponse({ error: "Report not found." }, { status: 404 });
       }
     }
 
@@ -276,6 +307,42 @@ function bearerToken(request: Request): string | null {
  * Locally (no URL env var): fall back to setTimeout so the work runs after
  * the response without blocking it.
  */
+async function triggerReportGeneration(
+  state: ReturnType<typeof getStateProvider>,
+  tripId: string,
+  userId: string,
+  siteUrl: string,
+): Promise<void> {
+  const reportToken = process.env.REPORT_TOKEN;
+  if (reportToken && process.env.URL) {
+    try {
+      await fetch(`${process.env.URL}/.netlify/functions/generate-report-background`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${reportToken}`,
+        },
+        body: JSON.stringify({ tripId, userId, siteUrl }),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await state.appendActivity({
+        level: "error",
+        scope: "report",
+        message: `Failed to trigger report generation: ${msg}`,
+        documentName: null,
+        details: { tripId },
+      });
+    }
+  } else {
+    // Local dev: run inline after returning response
+    const storage = createDocumentStorageProvider();
+    setTimeout(() => {
+      void generateTripReport(state, storage, { tripId, userId, siteUrl });
+    }, 0);
+  }
+}
+
 async function triggerIngestProcessing(
   state: ReturnType<typeof getStateProvider>,
   txId: string,

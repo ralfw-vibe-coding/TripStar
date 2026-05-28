@@ -46,6 +46,12 @@ export class LocalDocumentStorageProvider implements DocumentStorageProvider {
     };
   }
 
+  async storeBuffer(input: { key: string; buffer: Buffer; mimeType: string }): Promise<void> {
+    const path = join(this.storageDir, input.key);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, input.buffer);
+  }
+
   async readDocument(storageKey: string): Promise<{ base64: string }> {
     const content = await readFile(join(this.storageDir, storageKey));
     return { base64: content.toString("base64") };

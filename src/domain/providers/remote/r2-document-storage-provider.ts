@@ -41,6 +41,10 @@ export class R2DocumentStorageProvider implements DocumentStorageProvider {
     return { storageKey, originalFileName: input.originalFileName, mimeType: "application/pdf" };
   }
 
+  async storeBuffer(input: { key: string; buffer: Buffer; mimeType: string }): Promise<void> {
+    await this.putObject(input.key, input.buffer, input.mimeType);
+  }
+
   async readDocument(storageKey: string): Promise<{ base64: string }> {
     const response = await this.client.send(new GetObjectCommand({ Bucket: this.options.bucket, Key: storageKey }));
     const bytes = await response.Body?.transformToByteArray();
