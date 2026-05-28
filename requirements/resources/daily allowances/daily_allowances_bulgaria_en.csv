@@ -1,0 +1,112 @@
+Country,Abbr.,Daily Allowance (Euro)
+Austria,AUT,56
+Belgium,BEL,56
+Germany,GER,56
+Greece,GRE,43
+Denmark,DEN,56
+Estonia,EST,44
+Ireland,IRL,50
+Spain,ESP,47
+Italy,ITA,54
+Cyprus,CYP,53
+Latvia,LAT,40
+Lithuania,LTU,54
+Luxembourg,LUX,56
+Malta,MLT,46
+Netherlands,NED,56
+Poland,POL,47
+Portugal,POR,46
+Romania,ROU,46
+Slovakia,SVK,39
+Slovenia,SLO,48
+Hungary,HUN,39
+Finland,FIN,56
+France,FRA,56
+Croatia,CRO,41
+Czechia,CZE,47
+Sweden,SWE,56
+Other countries (European Union),OC-EU,56
+Albania,ALB,39
+Belarus,BLR,39
+Bosnia and Herzegovina,BIH,39
+United Kingdom,GBR,59
+Gibraltar,GIB,59
+Iceland,ISL,59
+Kosovo,KOS,39
+Liechtenstein,LIE,59
+Moldova,MDA,39
+Monaco,MON,56
+Norway,NOR,59
+North Macedonia,MKD,39
+Russia,RUS,39
+San Marino,SMR,59
+Serbia,SRB,39
+Ukraine,UKR,39
+Montenegro,MNE,39
+Switzerland,SUI,87
+Other countries (Europe),,50
+Azerbaijan,AZE,39
+Armenia,ARM,39
+Afghanistan,AFG,39
+Bangladesh,BAN,39
+Vietnam,VIE,39
+Georgia,GEO,39
+Israel,ISR,55
+India,IND,39
+Indonesia,INA,39
+Iraq,IRQ,39
+Iran,IRI,39
+Yemen,YEM,39
+Jordan,JOR,39
+Kazakhstan,KAZ,39
+Kyrgyzstan,KGZ,39
+China,CHN,39
+North Korea,PRK,39
+South Korea,KOR,50
+Kuwait,KUW,55
+Lebanon,LBN,39
+Malaysia,MAS,39
+Mongolia,MGL,39
+United Arab Emirates,UAE,50
+Pakistan,PAK,39
+Saudi Arabia,KSA,50
+Singapore,SGP,50
+Syria,SYR,39
+Tajikistan,TJK,39
+Turkmenistan,TKM,39
+Turkey,TUR,39
+Uzbekistan,UZB,39
+Japan,JPN,59
+Other countries (Asia and Middle East),OC-AME,42
+Algeria,ALG,42
+Angola,ANG,42
+Ghana,GHA,37
+Democratic Republic of the Congo,COD,37
+Egypt,EGY,37
+Ethiopia,ETH,37
+Zimbabwe,ZIM,37
+Kenya,KEN,37
+Cote d'Ivoire,CIV,37
+Libya,LBA,37
+Mali,MLI,37
+Morocco,MAR,36
+Mozambique,MOZ,37
+Nigeria,NGA,37
+Tunisia,TUN,37
+South Africa,RSA,37
+Other countries (Africa),,37
+Canada,CAN,58
+Mexico,MEX,53
+United States,USA,58
+Other countries (North America),OC-NA,57
+Argentina,ARG,39
+Brazil,BRA,39
+Colombia,COL,39
+Cuba,CUB,58
+Nicaragua,NCA,39
+Peru,PER,39
+Chile,CHI,39
+Other countries (Central and South America),OC-CSA,42
+Australia,AUS,64
+New Zealand,NZL,53
+"Other countries (Australia, New Zealand and Oceania)",OC-ANZO,59

@@ -25,12 +25,14 @@ import {
   DragEvent,
   FormEvent,
   KeyboardEvent,
+  MouseEvent,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import type { ActivityLogEntry, AnalysisJob, CalendarBooking, CalendarView, Trip, User } from "../domain/model";
+import type { ActivityLogEntry, AnalysisJob, CalendarBooking, CalendarView, DailyAllowance, Trip, User } from "../domain/model";
+import { DAILY_ALLOWANCES, type CountryAllowance } from "./daily-allowances-data";
 import {
   assignBookingTrip,
   clearAuthToken,
@@ -455,7 +457,7 @@ export function App() {
             analysisJobs={analysisJobs}
           />
         ) : (
-          <ReportsPanel trips={view?.trips ?? []} />
+          <ReportsPanel trips={view?.trips ?? []} onRefresh={reloadCalendar} />
         )}
       </section>
 
@@ -1863,27 +1865,196 @@ function TripDialog({
   );
 }
 
-function ReportsPanel({ trips }: { trips: Trip[] }) {
+// ─── Reports Panel ───────────────────────────────────────────────────────────
+
+function ReportsPanel({ trips, onRefresh }: { trips: Trip[]; onRefresh: () => void }) {
   return (
     <section className="reports">
       <header className="section-header">
         <div>
           <h2>Reports</h2>
-          <p>Report scaffolding for daily allowances and receipts</p>
+          <p>Daily allowances per trip</p>
         </div>
       </header>
-      <div className="report-grid">
+      <div className="report-list">
+        {trips.length === 0 && <p className="report-empty">No trips yet.</p>}
         {trips.map((trip) => (
-          <article className="report-row" key={trip.id}>
-            <span className="trip-swatch" style={{ background: tripColor(trip) }} />
-            <strong>{trip.title}</strong>
-            <span>
-              {trip.startDate} to {trip.endDate}
-            </span>
-          </article>
+          <TripReport key={trip.id} trip={trip} onRefresh={onRefresh} />
         ))}
       </div>
     </section>
+  );
+}
+
+function tripDays(trip: Trip): string[] {
+  if (!trip.startDate || !trip.endDate) return [];
+  const days: string[] = [];
+  // Use UTC dates to avoid DST issues
+  const [sy, sm, sd] = trip.startDate.split("-").map(Number);
+  const [ey, em, ed] = trip.endDate.split("-").map(Number);
+  const start = new Date(Date.UTC(sy, sm - 1, sd));
+  const end = new Date(Date.UTC(ey, em - 1, ed));
+  const current = new Date(start);
+  while (current <= end) {
+    days.push(current.toISOString().slice(0, 10));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return days;
+}
+
+function formatDayLabel(dateStr: string): string {
+  const [, month, day] = dateStr.split("-");
+  return `${day}.${month}.`;
+}
+
+function TripReport({ trip, onRefresh: _onRefresh }: { trip: Trip; onRefresh: () => void }) {
+  const days = tripDays(trip);
+
+  // Local copy for optimistic updates — synced from props when server data arrives
+  const [localAllowances, setLocalAllowances] = useState<DailyAllowance[]>(() => trip.dailyAllowances);
+  useEffect(() => { setLocalAllowances(trip.dailyAllowances); }, [trip.dailyAllowances]);
+
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
+  const [lastClickedDay, setLastClickedDay] = useState<string | null>(null);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [factor, setFactor] = useState<1 | 2>(2);
+
+  const allowanceMap = useMemo(
+    () => new Map(localAllowances.map((a) => [a.date, a])),
+    [localAllowances],
+  );
+  const total = useMemo(
+    () => localAllowances.reduce((sum, a) => sum + a.dailyAllowanceEuro, 0),
+    [localAllowances],
+  );
+
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return DAILY_ALLOWANCES;
+    return DAILY_ALLOWANCES.filter(
+      (c) => c.country.toLowerCase().includes(q) || c.abbr.toLowerCase().includes(q),
+    );
+  }, [countrySearch]);
+
+  function handleDayClick(date: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (e.shiftKey && lastClickedDay) {
+      const idxA = days.indexOf(lastClickedDay);
+      const idxB = days.indexOf(date);
+      const [from, to] = idxA <= idxB ? [idxA, idxB] : [idxB, idxA];
+      setSelectedDays(new Set(days.slice(from, to + 1)));
+    } else {
+      setSelectedDays((prev) => {
+        const next = new Set(prev);
+        if (next.has(date)) next.delete(date);
+        else next.add(date);
+        return next;
+      });
+      setLastClickedDay(date);
+    }
+  }
+
+  // c === null means "remove allowance for selected days"
+  function applyCountry(c: CountryAllowance | null) {
+    const newAllowances: DailyAllowance[] = [];
+    for (const date of days) {
+      if (selectedDays.has(date)) {
+        if (c !== null) {
+          newAllowances.push({ date, country: c.country, countryAbbr: c.abbr, dailyAllowanceEuro: c.baseEuro * factor, factor });
+        }
+        // c === null → skip (removes the entry)
+      } else {
+        const existing = allowanceMap.get(date);
+        if (existing?.country) newAllowances.push(existing);
+      }
+    }
+
+    // Optimistic: update UI instantly
+    setLocalAllowances(newAllowances);
+    setSelectedDays(new Set());
+    setLastClickedDay(null);
+    setCountrySearch("");
+
+    // Persist in background — revert on failure
+    void updateTrip(trip.id, { dailyAllowances: newAllowances }).catch(() => {
+      setLocalAllowances(trip.dailyAllowances);
+    });
+  }
+
+  return (
+    <article className="trip-report" style={{ borderLeftColor: tripColor(trip) }} onClick={() => setSelectedDays(new Set())}>
+      <header className="trip-report-header">
+        <div className="trip-report-title">
+          <span className="trip-report-number">#{trip.tripNumber}</span>
+          <strong className="trip-report-name">{trip.title}</strong>
+          <span className="trip-report-dates">
+            {trip.startDate} – {trip.endDate}
+          </span>
+        </div>
+      </header>
+
+      <div className="days-grid">
+        {days.map((date, idx) => {
+          const allowance = allowanceMap.get(date);
+          const isSet = !!(allowance?.country);
+          const isSelected = selectedDays.has(date);
+          return (
+            <button
+              key={date}
+              className={`day-tile${isSet ? " set" : ""}${isSelected ? " selected" : ""}`}
+              onClick={(e) => handleDayClick(date, e)}
+            >
+              <span className="day-tile-top">
+                <span className="day-index">{String(idx + 1).padStart(2, "0")}</span>
+                <span className="day-date">{formatDayLabel(date)}</span>
+              </span>
+              <span className="day-allowance">
+                {isSet ? `${allowance!.countryAbbr} ${allowance!.dailyAllowanceEuro}€` : "--"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="trip-report-footer">
+        <strong className="trip-total">Total daily allowances: {total}€</strong>
+      </div>
+
+      {selectedDays.size > 0 && (
+        <div className="country-picker" onClick={(e) => e.stopPropagation()}>
+          <div className="country-picker-controls">
+            <input
+              className="country-search"
+              type="text"
+              placeholder="Country or abbreviation"
+              value={countrySearch}
+              onChange={(e) => setCountrySearch(e.target.value)}
+              autoFocus
+            />
+            <div className="factor-toggle">
+              <button className={factor === 1 ? "active" : ""} onClick={() => setFactor(1)}>1x</button>
+              <button className={factor === 2 ? "active" : ""} onClick={() => setFactor(2)}>2x</button>
+            </div>
+          </div>
+          <ul className="country-list">
+            <li>
+              <button className="country-item country-item-remove" onClick={() => applyCountry(null)}>
+                <span className="country-name">— Remove allowance</span>
+              </button>
+            </li>
+            {filteredCountries.map((c) => (
+              <li key={c.abbr}>
+                <button className="country-item" onClick={() => applyCountry(c)}>
+                  <span className="country-name">{c.country}</span>
+                  <span className="country-abbr">{c.abbr}</span>
+                  <span className="country-amount">{c.baseEuro * factor}€</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </article>
   );
 }
 

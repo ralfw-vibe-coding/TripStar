@@ -1145,21 +1145,250 @@ textarea:disabled {
   border-color: #174ea6;
 }
 
-.report-grid {
-  display: grid;
-  gap: 10px;
+.report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.report-row {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 54px;
+.report-empty {
+  color: #7a8a95;
+  padding: 24px 0;
+}
+
+/* ─── Trip report card ─────────────────────────────────────────── */
+.trip-report {
   background: #ffffff;
   border: 1px solid #dbe2e7;
+  border-left: 4px solid #aaa;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 16px 18px 14px;
+  cursor: default;
+  user-select: none;
+}
+
+.trip-report-header {
+  margin-bottom: 14px;
+}
+
+.trip-report-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trip-report-number {
+  font-size: 12px;
+  color: #7a8a95;
+  font-weight: 500;
+}
+
+.trip-report-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.trip-report-dates {
+  font-size: 13px;
+  color: #7a8a95;
+}
+
+/* ─── Days grid ────────────────────────────────────────────────── */
+.days-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.day-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 90px;
+  padding: 7px 9px 7px;
+  border: 1.5px solid #d1d9de;
+  border-radius: 8px;
+  background: #f5f7f8;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.day-tile:hover {
+  border-color: #9aaab5;
+  background: #edf1f4;
+}
+
+.day-tile.set {
+  border-color: #3da86a;
+  background: #f0fbf4;
+}
+
+.day-tile.selected {
+  border-color: #2563eb;
+  background: #eff4ff;
+  box-shadow: 0 0 0 2px #93c5fd;
+}
+
+.day-tile-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #7a8a95;
+}
+
+.day-index {
+  font-weight: 600;
+}
+
+.day-allowance {
+  font-size: 13px;
+  font-weight: 600;
+  color: #18212f;
+}
+
+.day-tile.set .day-allowance {
+  color: #1a7a48;
+}
+
+.trip-report-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.trip-total {
+  font-size: 14px;
+  color: #18212f;
+}
+
+/* ─── Country picker ───────────────────────────────────────────── */
+.country-picker {
+  margin-top: 14px;
+  border-top: 1px solid #dbe2e7;
+  padding-top: 12px;
+  max-width: 440px;
+}
+
+.country-picker-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.country-search {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #c8d3da;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #f5f7f8;
+}
+
+.country-search:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  background: #fff;
+}
+
+.factor-toggle {
+  display: flex;
+  border: 1px solid #c8d3da;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.factor-toggle button {
+  padding: 5px 14px;
+  border: none;
+  background: #f5f7f8;
+  font-size: 13px;
+  font-weight: 500;
+  color: #7a8a95;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.factor-toggle button + button {
+  border-left: 1px solid #c8d3da;
+}
+
+.factor-toggle button.active {
+  background: #18212f;
+  color: #fff;
+}
+
+.country-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #dbe2e7;
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* name | abbr | amount — compact, no full-width stretch */
+.country-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f3f5;
+  transition: background 0.1s;
+}
+
+.country-item:last-child {
+  border-bottom: none;
+}
+
+.country-item:hover {
+  background: #f0f4ff;
+}
+
+.country-item-remove:hover {
+  background: #fff4f4;
+}
+
+.country-item-remove .country-name {
+  color: #b91c1c;
+}
+
+.country-name {
+  color: #18212f;
+  font-weight: 500;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.country-abbr {
+  color: #7a8a95;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  min-width: 40px;
+}
+
+.country-amount {
+  font-weight: 600;
+  color: #18212f;
+  flex-shrink: 0;
+  min-width: 38px;
+  text-align: right;
 }
 
 @media (max-width: 820px) {

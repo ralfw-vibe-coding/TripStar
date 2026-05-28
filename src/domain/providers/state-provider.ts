@@ -17,6 +17,7 @@ export interface UpdateTripInput {
   places?: string;
   sharedWithUserIds?: Id[];
   color?: string;
+  dailyAllowances?: import("../model").DailyAllowance[];
 }
 
 export interface UpdateBookingInput {
