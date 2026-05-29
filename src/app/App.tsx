@@ -8,6 +8,8 @@ import {
   LoaderCircle,
   LogOut,
   ExternalLink,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plane,
   Plus,
@@ -93,6 +95,7 @@ export function App() {
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!getStoredAuthToken()) {
@@ -419,16 +422,29 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">T*</span>
-          <div>
-            <h1>TripStar</h1>
-            <p>TripCal + TripRep</p>
+        <div className="sidebar-top">
+          <div className="brand">
+            <span className="brand-mark">T*</span>
+            <div className="brand-text">
+              <h1>TripStar</h1>
+              <p>TripCal + TripRep</p>
+            </div>
           </div>
+          <button
+            className="sidebar-toggle"
+            type="button"
+            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!isSidebarCollapsed}
+            onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
 
+        {!isSidebarCollapsed && (
+        <>
         <div className="profile-menu">
           <button className="profile-button" type="button" onClick={() => setIsProfileMenuOpen((open) => !open)}>
             <UserCircle size={20} />
@@ -507,6 +523,8 @@ export function App() {
             }}
           />
         </section>
+        </>
+        )}
       </aside>
 
       <section className="workspace">
