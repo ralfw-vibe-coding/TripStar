@@ -586,7 +586,7 @@ export function App() {
 
       {isDocumentDialogOpen && view && (
         <TextDocumentDialog
-          trips={visibleTripsForUser(view.trips, currentUser.id)}
+          trips={ownTrips}
           onClose={() => setIsDocumentDialogOpen(false)}
           onRefresh={reloadWorkspace}
           onSubmitted={async () => {
