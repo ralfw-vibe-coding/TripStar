@@ -2297,6 +2297,18 @@ function TripReport({
     () => new Map(localAllowances.map((a) => [a.date, a])),
     [localAllowances],
   );
+  // Assign each distinct country in this trip a stable color (first-seen order).
+  // A trip has at most ~10 countries, matching the palette length.
+  const countryColorIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const date of days) {
+      const country = allowanceMap.get(date)?.country;
+      if (country && !map.has(country)) {
+        map.set(country, map.size % COUNTRY_DAY_COLORS.length);
+      }
+    }
+    return map;
+  }, [days, allowanceMap]);
   // Only sum allowances for days currently in the trip's date range
   const allowancesTotal = useMemo(
     () => days.reduce((sum, date) => sum + (allowanceMap.get(date)?.dailyAllowanceEuro ?? 0), 0),
@@ -2450,17 +2462,22 @@ function TripReport({
           const allowance = allowanceMap.get(date);
           const isSet = !!(allowance?.country);
           const isSelected = selectedDays.has(date);
+          const colorIdx = allowance?.country ? countryColorIndex.get(allowance.country) : undefined;
+          const palette = colorIdx != null ? COUNTRY_DAY_COLORS[colorIdx] : null;
+          // Country color tints the tile, but an active selection (blue) takes priority.
+          const tileStyle = palette && !isSelected ? { borderColor: palette.border, background: palette.bg } : undefined;
           return (
             <button
               key={date}
               className={`day-tile${isSet ? " set" : ""}${isSelected ? " selected" : ""}`}
+              style={tileStyle}
               onClick={(e) => handleDayClick(date, e)}
             >
               <span className="day-tile-top">
                 <span className="day-index">{String(idx + 1).padStart(2, "0")}</span>
                 <span className="day-date">{formatDayLabel(date)}</span>
               </span>
-              <span className="day-allowance">
+              <span className="day-allowance" style={palette && !isSelected ? { color: palette.border } : undefined}>
                 {isSet ? `${allowance!.countryAbbr} ${allowance!.dailyAllowanceEuro}€` : "--"}
               </span>
             </button>
@@ -3048,6 +3065,21 @@ function shortDate(value: string): string {
 function tripColorForBooking(trip: NonNullable<CalendarBooking["trip"]>): string {
   return tripColor(trip);
 }
+
+// Up to 10 visually distinct colors, one per country within a trip.
+// Each entry: a saturated border/text color plus a light background tint.
+const COUNTRY_DAY_COLORS: ReadonlyArray<{ border: string; bg: string }> = [
+  { border: "#3da86a", bg: "#eafaf0" }, // green
+  { border: "#e0795b", bg: "#fdeee9" }, // terracotta
+  { border: "#9b6dd1", bg: "#f3ecfb" }, // purple
+  { border: "#d9a23b", bg: "#fcf4e2" }, // amber
+  { border: "#3aa6a6", bg: "#e7f7f7" }, // teal
+  { border: "#d05c8c", bg: "#fceaf2" }, // pink
+  { border: "#6b8e3d", bg: "#f1f6e6" }, // olive
+  { border: "#5b7fd0", bg: "#eaf0fc" }, // indigo
+  { border: "#c2553f", bg: "#fbeae6" }, // rust
+  { border: "#5a6b78", bg: "#eef2f4" }, // slate
+];
 
 function fillEndDateIfEmpty(event: ChangeEvent<HTMLInputElement>): void {
   const form = event.currentTarget.form;
