@@ -723,7 +723,7 @@ function TripList({ title, trips, users, currentUserId, onEdit }: { title: strin
                 <span className="trip-row-main">
                   <strong>{trip.title}</strong>
                   {trip.title !== `#${trip.tripNumber}` && <span>#{trip.tripNumber}</span>}
-                  {owner && <span className="participant-chip">{owner.shortCode}</span>}
+                  {owner && <span className="participant-chip" style={userChipStyle(owner)}>{owner.shortCode}</span>}
                 </span>
                 <span className="trip-row-dates">
                   {shortDate(trip.startDate)}-{shortDate(trip.endDate)}
@@ -1431,7 +1431,7 @@ function ParticipantChips({ users }: { users: User[] }) {
   return (
     <span className="participant-chips">
       {users.map((user) => (
-        <span className="participant-chip" key={user.id}>
+        <span className="participant-chip" key={user.id} style={userChipStyle(user)}>
           {user.shortCode}
         </span>
       ))}
@@ -1458,6 +1458,7 @@ function ParticipantPicker({
             <button
               type="button"
               className={`participant-choice ${selected ? "selected" : ""}`}
+              style={userChipStyle(user)}
               key={user.id}
               onClick={() => {
                 const next = selected ? selectedUserIds.filter((userId) => userId !== user.id) : [...selectedUserIds, user.id];
@@ -1471,6 +1472,38 @@ function ParticipantPicker({
       </div>
     </section>
   );
+}
+
+const userChipPalette = [
+  { background: "#e5f4ff", border: "#90c5e8", color: "#075985" },
+  { background: "#fce7f3", border: "#e9a8c7", color: "#9d174d" },
+  { background: "#ecfdf3", border: "#9fd5b2", color: "#166534" },
+  { background: "#fff4dd", border: "#e4bd76", color: "#92400e" },
+  { background: "#ede9fe", border: "#b8a9ed", color: "#5b21b6" },
+  { background: "#e6fffb", border: "#8fd6ce", color: "#115e59" },
+  { background: "#ffe8e8", border: "#e7a0a0", color: "#991b1b" },
+  { background: "#f1f5d8", border: "#c2cf81", color: "#4d5d12" },
+  { background: "#e8edff", border: "#a7b6ee", color: "#3730a3" },
+  { background: "#f8e8ff", border: "#d3a4e6", color: "#7e22ce" },
+  { background: "#e7f8ee", border: "#9bc9aa", color: "#17603a" },
+  { background: "#fff0e6", border: "#e9b08c", color: "#9a3412" },
+];
+
+function userChipStyle(user: User): CSSProperties {
+  const color = userChipPalette[stableHash(user.id) % userChipPalette.length];
+  return {
+    "--chip-background": color.background,
+    "--chip-border": color.border,
+    "--chip-color": color.color,
+  } as CSSProperties;
+}
+
+function stableHash(value: string): number {
+  let hash = 0;
+  for (const character of value) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return hash;
 }
 
 interface BookingDraft {

@@ -800,11 +800,11 @@ textarea:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #bfd3cb;
+  border: 1px solid var(--chip-border, #bfd3cb);
   border-radius: 999px;
   padding: 2px 8px;
-  background: #eef8f4;
-  color: #0d5c4c;
+  background: var(--chip-background, #eef8f4);
+  color: var(--chip-color, #0d5c4c);
   font-size: 12px;
   font-weight: 800;
 }
@@ -924,14 +924,12 @@ textarea:disabled {
 
 .participant-choice {
   cursor: pointer;
-  background: #ffffff;
-  color: #667085;
+  opacity: 0.62;
 }
 
 .participant-choice.selected {
-  border-color: #0d8a72;
-  background: #e8f3ef;
-  color: #0d5c4c;
+  opacity: 1;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--chip-border, #0d8a72);
 }
 
 .detail-actions {
