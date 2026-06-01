@@ -25,7 +25,7 @@ export async function generateTripReport(
   await state.appendActivity({
     level: "info",
     scope: "report",
-    message: "Generating trip report…",
+    message: "Report generation started",
     documentName: null,
     details: { tripId },
   });
@@ -101,7 +101,7 @@ export async function generateTripReport(
   await state.appendActivity({
     level: "info",
     scope: "report",
-    message: `Trip ${trip.tripNumber} report ready`,
+    message: `Report generation finished for trip #${trip.tripNumber}`,
     documentName: null,
     details: { tripId, downloadUrl },
   });
@@ -111,6 +111,14 @@ export async function generateTripReport(
     tripNumber: trip.tripNumber,
     tripTitle: trip.title,
     downloadUrl,
+  });
+
+  await state.appendActivity({
+    level: "info",
+    scope: "report",
+    message: `Report for trip #${trip.tripNumber} sent to ${user.email}`,
+    documentName: null,
+    details: { tripId, recipientEmail: user.email, downloadUrl },
   });
 }
 

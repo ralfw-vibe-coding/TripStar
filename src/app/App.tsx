@@ -96,6 +96,7 @@ export function App() {
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!getStoredAuthToken()) {
@@ -144,6 +145,19 @@ export function App() {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [pendingDeleteBookingId]);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isProfileMenuOpen]);
 
   const ownTrips = useMemo(
     () => (currentUser ? ownTripsForUser(view?.trips ?? [], currentUser.id) : []),
@@ -445,7 +459,7 @@ export function App() {
 
         {!isSidebarCollapsed && (
         <>
-        <div className="profile-menu">
+        <div className="profile-menu" ref={profileMenuRef}>
           <button className="profile-button" type="button" onClick={() => setIsProfileMenuOpen((open) => !open)}>
             <UserCircle size={20} />
             <span>{currentUser.shortCode}</span>
@@ -893,17 +907,16 @@ function ActivityLogDialog({ analysisJobs, onClose }: { analysisJobs: AnalysisJo
     void load();
   }, []);
 
-  // Auto-refresh while analysis jobs are running
+  // Reports do not have their own job state yet, so keep the open log live.
   useEffect(() => {
-    if (!analysisJobs.some((j) => j.status === "queued" || j.status === "running")) return;
     const timer = window.setInterval(() => void load(), 2000);
     return () => window.clearInterval(timer);
-  }, [analysisJobs]);
+  }, []);
 
   const hasRunningJobs = analysisJobs.some((j) => j.status === "queued" || j.status === "running");
 
   const displayEntries = entries.filter(
-    (e) => e.scope === "analysis" || e.scope === "inbox" || e.scope === "documents",
+    (e) => e.scope === "analysis" || e.scope === "inbox" || e.scope === "documents" || e.scope === "report",
   );
 
   return (
@@ -1742,31 +1755,6 @@ function usersForIds(users: User[], userIds: string[]): User[] {
   });
 }
 
-function AnalysisProtocol({ entries, jobs }: { entries: ActivityLogEntry[]; jobs: AnalysisJob[] }) {
-  const stagedEntries = entries.filter((entry) => entry.scope === "analysis" || entry.scope === "inbox");
-  const fallbackEntries = entries.filter((entry) => entry.scope === "documents" || entry.scope === "inbox");
-  const analysisEntries = (stagedEntries.length > 0 ? stagedEntries : fallbackEntries).slice(0, 18);
-  const hasRunningJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
-  return (
-    <section className="analysis-protocol" aria-label="Analysis log">
-      <header className="section-header compact">
-        <div>
-          <h2>Log</h2>
-          <p>{analysisEntries.length} recent entries</p>
-        </div>
-        {hasRunningJobs && <LoaderCircle className="protocol-spinner" size={16} aria-hidden="true" />}
-      </header>
-      <div className="protocol-stack">
-        {analysisEntries.length === 0 ? (
-          <div className="empty-protocol">No analyses yet.</div>
-        ) : (
-          analysisEntries.map((entry) => <ProtocolRow key={entry.id} entry={entry} />)
-        )}
-      </div>
-    </section>
-  );
-}
-
 function ProtocolRow({ entry }: { entry: ActivityLogEntry }) {
   const details = documentActivityDetails(entry.details);
   const result = protocolResult(entry, details.bookingCount, details.status);
@@ -1817,6 +1805,7 @@ function protocolLevel(entry: ActivityLogEntry, status: AnalysisJob["status"] | 
 }
 
 function protocolSource(entry: ActivityLogEntry, sourceType: AnalysisJob["sourceType"] | null): string {
+  if (entry.scope === "report") return "REPORT";
   if (sourceType === "screenshot") return "SCREEN";
   if (sourceType === "text") return "TEXT";
   if (sourceType === "pdf") return "PDF";
