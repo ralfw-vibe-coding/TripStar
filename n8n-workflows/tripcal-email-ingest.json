@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-27T14:21:35.555Z",
+  "updatedAt": "2026-06-01T07:02:32.934Z",
   "createdAt": "2026-04-29T10:19:00.365Z",
   "id": "oMQHdZ1oXg4q8Huv",
   "name": "TripCal - Email Ingest",
@@ -93,7 +93,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const responses = $input.all();\nconst configs = $('TripCal Config').all();\nconst failures = [];\n\nfor (let index = 0; index < responses.length; index += 1) {\n  const response = responses[index].json ?? {};\n  if (!response.error) continue;\n\n  const config = configs[index]?.json ?? configs[0]?.json ?? {};\n  const payload = config.payload ?? {};\n  const error = response.error;\n\n  failures.push({\n    json: {\n      sender: payload.sender || '',\n      txId: payload.txId || '',\n      filename: payload.document?.filename || null,\n      endpoint: config.tripcalUrl,\n      httpStatus: error.httpCode || error.statusCode || error.status || error.code || 'request_error',\n      httpStatusText: error.message || error.name || 'TripStar request failed',\n      responseBody: error.description || error.response?.body || error.stack || JSON.stringify(error),\n    },\n  });\n}\n\nreturn failures;"
+        "jsCode": "const responses = $input.all();\nconst configs = $('TripCal Config').all();\nconst failures = [];\n\nfunction readableReason(error, sender) {\n  const raw = [error.response?.body, error.description, error.message]\n    .filter(Boolean)\n    .map(String)\n    .join('\\n');\n  if (/Unknown sender:/i.test(raw)) {\n    return `Die Absender-E-Mail-Adresse ${sender || '(leer)'} ist TripStar nicht bekannt. Deshalb können aus dieser E-Mail keine Buchungen verarbeitet werden.`;\n  }\n  return 'TripStar hat die E-Mail abgelehnt. Bitte versuche es später erneut oder importiere das Dokument direkt in TripStar.';\n}\n\nfor (let index = 0; index < responses.length; index += 1) {\n  const response = responses[index].json ?? {};\n  if (!response.error) continue;\n\n  const config = configs[index]?.json ?? configs[0]?.json ?? {};\n  const payload = config.payload ?? {};\n  const error = response.error;\n  const sender = String(payload.sender || '').trim();\n\n  failures.push({\n    json: {\n      sender,\n      txId: payload.txId || '',\n      filename: payload.document?.filename || null,\n      reason: readableReason(error, sender),\n    },\n  });\n}\n\nreturn failures;"
       },
       "id": "438ed047-6e49-4208-99b4-427080336677",
       "name": "Build TripCal Error",
@@ -106,7 +106,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first();\nconst sender = item.json.sender || '';\n\nconst body = [\n  'TripStar konnte eine weitergeleitete E-Mail nicht verarbeiten.',\n  '',\n  `Von: ${sender}`,\n  `TripStar Endpoint: ${item.json.endpoint}`,\n  '',\n  `HTTP Status: ${item.json.httpStatus} ${item.json.httpStatusText || ''}`.trim(),\n  '',\n  'Antwort der TripStar API:',\n  item.json.responseBody || '(keine Antwort)',\n  '',\n  item.json.filename ? `Dokument: ${item.json.filename}` : '',\n].filter((line) => line !== '').join('\\n');\n\nreturn [\n  {\n    json: {\n      toEmail: sender,\n      fromEmail: 'tripcal-documents@work-with-ease.eu',\n      subject: 'TripStar Fehler: Email-Ingest',\n      text: body,\n      headers: '',\n    },\n  },\n];"
+        "jsCode": "const item = $input.first();\nconst sender = item.json.sender || '';\n\nconst body = [\n  'TripStar konnte eine weitergeleitete E-Mail nicht verarbeiten.',\n  '',\n  `Von: ${sender}`,\n  item.json.filename ? `Dokument: ${item.json.filename}` : '',\n  '',\n  'Grund:',\n  item.json.reason || 'TripStar hat die E-Mail abgelehnt.',\n].filter((line) => line !== '').join('\\n');\n\nreturn [\n  {\n    json: {\n      toEmail: sender,\n      fromEmail: 'tripcal-documents@work-with-ease.eu',\n      subject: 'TripStar: E-Mail konnte nicht importiert werden',\n      text: body,\n      headers: '',\n    },\n  },\n];"
       },
       "id": "a526b583-b43d-428b-b963-61f68f1c69a0",
       "name": "Build Failure Email",
@@ -219,17 +219,15 @@
     "availableInMCP": false
   },
   "staticData": {
-    "node:Email Trigger": {
-      "lastMessageUid": 50
-    }
+    "node:Email Trigger": {}
   },
   "meta": {
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "7c76d14c-81eb-412f-80c4-71381a72c691",
-  "activeVersionId": "7c76d14c-81eb-412f-80c4-71381a72c691",
-  "versionCounter": 135,
+  "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
+  "activeVersionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
+  "versionCounter": 146,
   "triggerCount": 1,
   "shared": [
     {
@@ -252,9 +250,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-05-27T14:21:35.556Z",
-    "createdAt": "2026-05-27T14:21:35.556Z",
-    "versionId": "7c76d14c-81eb-412f-80c4-71381a72c691",
+    "updatedAt": "2026-06-01T07:02:32.935Z",
+    "createdAt": "2026-06-01T07:02:32.935Z",
+    "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
     "workflowId": "oMQHdZ1oXg4q8Huv",
     "nodes": [
       {
@@ -343,7 +341,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const responses = $input.all();\nconst configs = $('TripCal Config').all();\nconst failures = [];\n\nfor (let index = 0; index < responses.length; index += 1) {\n  const response = responses[index].json ?? {};\n  if (!response.error) continue;\n\n  const config = configs[index]?.json ?? configs[0]?.json ?? {};\n  const payload = config.payload ?? {};\n  const error = response.error;\n\n  failures.push({\n    json: {\n      sender: payload.sender || '',\n      txId: payload.txId || '',\n      filename: payload.document?.filename || null,\n      endpoint: config.tripcalUrl,\n      httpStatus: error.httpCode || error.statusCode || error.status || error.code || 'request_error',\n      httpStatusText: error.message || error.name || 'TripStar request failed',\n      responseBody: error.description || error.response?.body || error.stack || JSON.stringify(error),\n    },\n  });\n}\n\nreturn failures;"
+          "jsCode": "const responses = $input.all();\nconst configs = $('TripCal Config').all();\nconst failures = [];\n\nfunction readableReason(error, sender) {\n  const raw = [error.response?.body, error.description, error.message]\n    .filter(Boolean)\n    .map(String)\n    .join('\\n');\n  if (/Unknown sender:/i.test(raw)) {\n    return `Die Absender-E-Mail-Adresse ${sender || '(leer)'} ist TripStar nicht bekannt. Deshalb können aus dieser E-Mail keine Buchungen verarbeitet werden.`;\n  }\n  return 'TripStar hat die E-Mail abgelehnt. Bitte versuche es später erneut oder importiere das Dokument direkt in TripStar.';\n}\n\nfor (let index = 0; index < responses.length; index += 1) {\n  const response = responses[index].json ?? {};\n  if (!response.error) continue;\n\n  const config = configs[index]?.json ?? configs[0]?.json ?? {};\n  const payload = config.payload ?? {};\n  const error = response.error;\n  const sender = String(payload.sender || '').trim();\n\n  failures.push({\n    json: {\n      sender,\n      txId: payload.txId || '',\n      filename: payload.document?.filename || null,\n      reason: readableReason(error, sender),\n    },\n  });\n}\n\nreturn failures;"
         },
         "id": "438ed047-6e49-4208-99b4-427080336677",
         "name": "Build TripCal Error",
@@ -356,7 +354,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const item = $input.first();\nconst sender = item.json.sender || '';\n\nconst body = [\n  'TripStar konnte eine weitergeleitete E-Mail nicht verarbeiten.',\n  '',\n  `Von: ${sender}`,\n  `TripStar Endpoint: ${item.json.endpoint}`,\n  '',\n  `HTTP Status: ${item.json.httpStatus} ${item.json.httpStatusText || ''}`.trim(),\n  '',\n  'Antwort der TripStar API:',\n  item.json.responseBody || '(keine Antwort)',\n  '',\n  item.json.filename ? `Dokument: ${item.json.filename}` : '',\n].filter((line) => line !== '').join('\\n');\n\nreturn [\n  {\n    json: {\n      toEmail: sender,\n      fromEmail: 'tripcal-documents@work-with-ease.eu',\n      subject: 'TripStar Fehler: Email-Ingest',\n      text: body,\n      headers: '',\n    },\n  },\n];"
+          "jsCode": "const item = $input.first();\nconst sender = item.json.sender || '';\n\nconst body = [\n  'TripStar konnte eine weitergeleitete E-Mail nicht verarbeiten.',\n  '',\n  `Von: ${sender}`,\n  item.json.filename ? `Dokument: ${item.json.filename}` : '',\n  '',\n  'Grund:',\n  item.json.reason || 'TripStar hat die E-Mail abgelehnt.',\n].filter((line) => line !== '').join('\\n');\n\nreturn [\n  {\n    json: {\n      toEmail: sender,\n      fromEmail: 'tripcal-documents@work-with-ease.eu',\n      subject: 'TripStar: E-Mail konnte nicht importiert werden',\n      text: body,\n      headers: '',\n    },\n  },\n];"
         },
         "id": "a526b583-b43d-428b-b963-61f68f1c69a0",
         "name": "Build Failure Email",
@@ -469,18 +467,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-05-27T14:21:35.640Z",
-        "id": 57,
+        "createdAt": "2026-06-01T07:02:33.018Z",
+        "id": 61,
         "workflowId": "oMQHdZ1oXg4q8Huv",
-        "versionId": "7c76d14c-81eb-412f-80c4-71381a72c691",
+        "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
         "event": "deactivated",
         "userId": "23dff7ef-f296-4ade-a094-73bac4a1ec78"
       },
       {
-        "createdAt": "2026-05-27T14:21:35.836Z",
-        "id": 58,
+        "createdAt": "2026-06-01T07:02:33.203Z",
+        "id": 62,
         "workflowId": "oMQHdZ1oXg4q8Huv",
-        "versionId": "7c76d14c-81eb-412f-80c4-71381a72c691",
+        "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
         "event": "activated",
         "userId": "23dff7ef-f296-4ade-a094-73bac4a1ec78"
       }
