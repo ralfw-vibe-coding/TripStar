@@ -696,7 +696,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
             <label className="field-label">
               Code
               <input
-                inputMode="numeric"
+                type="text"
+                inputMode="text"
                 autoComplete="one-time-code"
                 value={otp}
                 onChange={(event) => setOtp(event.target.value)}
@@ -1058,7 +1059,7 @@ function CalendarPanel({
 }) {
   const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [dateFilter, setDateFilter] = useState<"today" | "10" | "30" | "all">("all");
+  const [dateFilter, setDateFilter] = useState<"today" | "10" | "30" | "all">("today");
 
   if (!view) {
     return <div className="loading">Loading calendar...</div>;
