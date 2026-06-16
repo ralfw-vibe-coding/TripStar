@@ -727,7 +727,6 @@ textarea:disabled {
 }
 
 .booking-main span,
-.status-pill,
 .booking-trip,
 .field-label,
 .detail-grid {
@@ -745,7 +744,6 @@ textarea:disabled {
 }
 
 .booking-trip,
-.status-pill,
 .flight-link,
 .delete-booking-button {
   border: 1px solid #cfd8df;

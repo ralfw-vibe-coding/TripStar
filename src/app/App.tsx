@@ -1071,7 +1071,7 @@ function CalendarPanel({
   const filteredBookings = filterCalendarBookings(view.bookings, selectedTripIds, selectedUserIds, dateFilter);
 
   const tripOptions = [
-    { value: "inbox", label: "Inbox" },
+    { value: "inbox", label: "No trip" },
     ...visibleTrips.map((trip) => ({ value: trip.id, label: `${trip.title} #${trip.tripNumber}` })),
   ];
   const userOptions = filterUsers.map((user) => ({ value: user.id, label: user.shortCode }));
@@ -1105,7 +1105,7 @@ function CalendarPanel({
             options={tripOptions}
             selected={selectedTripIds}
             onChange={setSelectedTripIds}
-            allLabel="All trips and inbox"
+            allLabel="All trips and no trip"
           />
         </label>
         <label>
@@ -1273,7 +1273,7 @@ function BookingCard({
   return (
     <article
       className={`booking-card ${expandedBookingId === booking.id ? "expanded" : ""}`}
-      style={{ borderLeftColor: booking.trip ? tripColorForBooking(booking.trip) : "#cfd8df" }}
+      style={{ borderLeftColor: booking.trip ? tripColorForBooking(booking.trip) : "transparent" }}
     >
       <div
         role="button"
@@ -1312,7 +1312,6 @@ function BookingCard({
             </a>
           )}
           {booking.trip && <span className="booking-trip">{booking.trip.title} #{booking.trip.tripNumber}</span>}
-          {booking.status === "inbox" && <span className="status-pill">Inbox</span>}
           <ParticipantChips users={usersForIds(users, booking.participantUserIds)} />
           <span
             role="button"
@@ -1418,7 +1417,7 @@ function BookingCard({
                 />
               ) : (
                 <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
-                  <option value="">Inbox / no trip</option>
+                  <option value="">No trip</option>
                   {assignableTrips.map((trip) => (
                     <option key={trip.id} value={trip.id}>
                       {trip.title} #{trip.tripNumber}
