@@ -1600,18 +1600,11 @@ function ParticipantPicker({
 }
 
 const userChipPalette = [
-  { background: "#e5f4ff", border: "#90c5e8", color: "#075985" },
-  { background: "#fce7f3", border: "#e9a8c7", color: "#9d174d" },
-  { background: "#ecfdf3", border: "#9fd5b2", color: "#166534" },
-  { background: "#fff4dd", border: "#e4bd76", color: "#92400e" },
-  { background: "#ede9fe", border: "#b8a9ed", color: "#5b21b6" },
-  { background: "#e6fffb", border: "#8fd6ce", color: "#115e59" },
-  { background: "#ffe8e8", border: "#e7a0a0", color: "#991b1b" },
-  { background: "#f1f5d8", border: "#c2cf81", color: "#4d5d12" },
-  { background: "#e8edff", border: "#a7b6ee", color: "#3730a3" },
-  { background: "#f8e8ff", border: "#d3a4e6", color: "#7e22ce" },
-  { background: "#e7f8ee", border: "#9bc9aa", color: "#17603a" },
-  { background: "#fff0e6", border: "#e9b08c", color: "#9a3412" },
+  { background: "#e0f2fe", border: "#0284c7", color: "#075985" },
+  { background: "#dcfce7", border: "#16a34a", color: "#166534" },
+  { background: "#fef3c7", border: "#d97706", color: "#92400e" },
+  { background: "#fce7f3", border: "#db2777", color: "#9d174d" },
+  { background: "#ede9fe", border: "#7c3aed", color: "#5b21b6" },
 ];
 
 function userChipStyle(user: User): CSSProperties {
