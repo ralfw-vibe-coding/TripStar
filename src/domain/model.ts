@@ -6,6 +6,7 @@ export type BookingType =
   | "flight"
   | "lodging"
   | "train"
+  | "bus"
   | "rental_car"
   | "ferry"
   | "event"

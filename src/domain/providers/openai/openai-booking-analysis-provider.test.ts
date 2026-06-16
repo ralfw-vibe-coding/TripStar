@@ -51,6 +51,7 @@ describe("OpenAIBookingAnalysisProvider", () => {
                 },
                 train: null,
                 lodging: null,
+                bus: null,
                 rentalCar: null,
                 ferry: null,
                 event: null,
@@ -131,8 +132,9 @@ describe("OpenAIBookingAnalysisProvider", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     const schema = body.text.format.schema;
     expect(schema.properties.bookings.items.required).toEqual(
-      expect.arrayContaining(["flight", "train", "lodging", "evidence", "warnings", "confidence"]),
+      expect.arrayContaining(["flight", "train", "lodging", "bus", "evidence", "warnings", "confidence"]),
     );
     expect(body.input[0].content).toContain("For flights, prefer structured flight data");
+    expect(body.input[0].content).toContain('use type "bus"');
   });
 });

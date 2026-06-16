@@ -82,7 +82,7 @@ export class OpenAIBookingAnalysisProvider implements BookingAnalysisProvider {
           {
             role: "system",
             content:
-              `Extract travel bookings from the user's document into type-specific JSON. Return only JSON matching the requested schema. If no bookings are present, return an empty bookings array. Use exactly one type-specific object per booking and set the others to null. Important: when a document contains multiple flight segments of the same itinerary (e.g. connecting flights or a multi-leg journey with a layover), extract each individual flight segment as its own separate booking entry — even if they share a booking reference or ticket number. For flights, prefer structured flight data over prose: flight number, airline, airport IATA codes, airport names, cities, terminals, gates, departure and arrival times, booking reference, ticket number, passengers, seats, cabin, and baggage. Airport IATA codes are important: if the document names an airport or city and the commercial airport code is well-known, infer the IATA code and add a warning that it was inferred; leave it null only when genuinely uncertain. For every date or time found, always include the IANA timezone identifier (e.g. "Europe/Berlin", "Asia/Hong_Kong", "America/New_York") for the location where that time applies — derive it from the city, country, address, airport code, or any other location hint present in the document; leave null only when genuinely uncertain. Preserve extra useful source information in importantDetails. Add evidence entries for important fields using short source excerpts. Add warnings when a value is inferred, ambiguous, or missing. If a booking date has no year, assume ${currentYear}. Return date/time values as ISO 8601 strings whenever possible; otherwise keep the source date string so it can be normalized later. Also detect if the document is a payment receipt: set receipt.isReceipt to true if the document is or contains an invoice, bill, or proof of payment for a travel-related expense (e.g. hotel invoice, taxi, airline fee, conference fee, restaurant during travel). If isReceipt is true, extract: amount (total amount paid as a number), currency (ISO 4217 code, e.g. EUR), date (payment or invoice date as YYYY-MM-DD), purpose (brief description, e.g. "Hotel Berlin", "Taxi to airport"), type ("reimbursable" if a business expense to be reimbursed by an employer/client, "report_only" if to be declared but not reimbursed, null if unclear).`,
+              `Extract travel bookings from the user's document into type-specific JSON. Return only JSON matching the requested schema. If no bookings are present, return an empty bookings array. Use exactly one type-specific object per booking and set the others to null. Important: when a document contains multiple flight segments of the same itinerary (e.g. connecting flights or a multi-leg journey with a layover), extract each individual flight segment as its own separate booking entry — even if they share a booking reference or ticket number. For flights, prefer structured flight data over prose: flight number, airline, airport IATA codes, airport names, cities, terminals, gates, departure and arrival times, booking reference, ticket number, passengers, seats, cabin, and baggage. For bus, shuttle, coach, airport transfer, private transfer, taxi, and other road passenger transport tickets, use type "bus" unless the document is clearly a rental car booking. Airport IATA codes are important: if the document names an airport or city and the commercial airport code is well-known, infer the IATA code and add a warning that it was inferred; leave it null only when genuinely uncertain. For every date or time found, always include the IANA timezone identifier (e.g. "Europe/Berlin", "Asia/Hong_Kong", "America/New_York") for the location where that time applies — derive it from the city, country, address, airport code, or any other location hint present in the document; leave null only when genuinely uncertain. Preserve extra useful source information in importantDetails. Add evidence entries for important fields using short source excerpts. Add warnings when a value is inferred, ambiguous, or missing. If a booking date has no year, assume ${currentYear}. Return date/time values as ISO 8601 strings whenever possible; otherwise keep the source date string so it can be normalized later. Also detect if the document is a payment receipt: set receipt.isReceipt to true if the document is or contains an invoice, bill, or proof of payment for a travel-related expense (e.g. hotel invoice, taxi, airline fee, conference fee, restaurant during travel). If isReceipt is true, extract: amount (total amount paid as a number), currency (ISO 4217 code, e.g. EUR), date (payment or invoice date as YYYY-MM-DD), purpose (brief description, e.g. "Hotel Berlin", "Taxi to airport"), type ("reimbursable" if a business expense to be reimbursed by an employer/client, "report_only" if to be declared but not reimbursed, null if unclear).`,
           },
           {
             role: "user",
@@ -280,6 +280,7 @@ function bookingExtractionSchema(): Record<string, unknown> {
             "flight",
             "train",
             "lodging",
+            "bus",
             "rentalCar",
             "ferry",
             "event",
@@ -290,11 +291,12 @@ function bookingExtractionSchema(): Record<string, unknown> {
             "confidence",
           ],
           properties: {
-            type: { type: "string", enum: ["flight", "lodging", "train", "rental_car", "ferry", "event", "other"] },
+            type: { type: "string", enum: ["flight", "lodging", "train", "bus", "rental_car", "ferry", "event", "other"] },
             summary: { type: "string" },
             flight,
             train,
             lodging,
+            bus: generic,
             rentalCar: generic,
             ferry: generic,
             event: generic,

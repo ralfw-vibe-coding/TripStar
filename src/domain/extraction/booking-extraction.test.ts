@@ -39,6 +39,7 @@ describe("projectExtractedBooking", () => {
       },
       train: null,
       lodging: null,
+      bus: null,
       rentalCar: null,
       ferry: null,
       event: null,
@@ -99,6 +100,7 @@ describe("projectExtractedBooking", () => {
         phone: "+49 40 123456",
         cancellationDeadlineAtLocal: "2026-07-09T18:00:00",
       },
+      bus: null,
       rentalCar: null,
       ferry: null,
       event: null,
@@ -122,5 +124,49 @@ describe("projectExtractedBooking", () => {
     expect(booking.details).toContain("Phone: +49 40 123456");
     expect(booking.details).toContain("Breakfast included.");
     expect(booking.details).toContain("Warnings: City tax may be due at check-in.");
+  });
+
+  it("projects bus and shuttle JSON into the booking surface", () => {
+    const extracted: ExtractedBooking = {
+      type: "bus",
+      summary: "Airport shuttle to Sofia",
+      flight: null,
+      train: null,
+      lodging: null,
+      bus: {
+        providerName: "Sofia Shuttle",
+        serviceIdentifier: "SH-42",
+        fromText: "Sofia Airport",
+        toText: "Hotel Balkan",
+        startAtLocal: "2026-05-10T12:00",
+        endAtLocal: "2026-05-10T12:35",
+        startTimeZone: "Europe/Sofia",
+        endTimeZone: "Europe/Sofia",
+        people: ["Ralf Westphal"],
+      },
+      rentalCar: null,
+      ferry: null,
+      event: null,
+      other: null,
+      importantDetails: ["Driver will wait at arrivals."],
+      evidence: [],
+      warnings: [],
+      confidence: 0.84,
+    };
+
+    const booking = projectExtractedBooking(extracted, { currentYear: 2026, normalizeDateTime });
+
+    expect(booking).toMatchObject({
+      type: "bus",
+      title: "Airport shuttle to Sofia",
+      startAt: "2026-05-10T09:00:00.000Z",
+      endAt: "2026-05-10T09:35:00.000Z",
+      fromText: "Sofia Airport",
+      toText: "Hotel Balkan",
+      travelers: ["Ralf Westphal"],
+      serviceIdentifier: "SH-42",
+      operator: "Sofia Shuttle",
+    });
+    expect(booking.details).toContain("Driver will wait at arrivals.");
   });
 });

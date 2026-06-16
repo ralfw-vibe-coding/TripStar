@@ -1,5 +1,7 @@
 import {
   CalendarDays,
+  Bus,
+  Car,
   Check,
   Download,
   FileUp,
@@ -1344,6 +1346,7 @@ function BookingCard({
                 <option value="flight">Flight</option>
                 <option value="lodging">Lodging</option>
                 <option value="train">Train</option>
+                <option value="bus">Bus / shuttle</option>
                 <option value="rental_car">Rental car</option>
                 <option value="ferry">Ferry</option>
                 <option value="event">Event</option>
@@ -2958,6 +2961,8 @@ function iconForType(type: CalendarBooking["type"]) {
   if (type === "flight") return <Plane size={18} />;
   if (type === "lodging") return <Hotel size={18} />;
   if (type === "train") return <TrainFront size={18} />;
+  if (type === "bus") return <Bus size={18} />;
+  if (type === "rental_car") return <Car size={18} />;
   return <CalendarDays size={18} />;
 }
 

@@ -81,6 +81,7 @@ export interface ExtractedBooking {
   flight: FlightExtraction | null;
   train: TrainExtraction | null;
   lodging: LodgingExtraction | null;
+  bus: GenericTypedExtraction | null;
   rentalCar: GenericTypedExtraction | null;
   ferry: GenericTypedExtraction | null;
   event: GenericTypedExtraction | null;
@@ -214,7 +215,7 @@ function projectionFor(
     };
   }
 
-  const generic = extracted.rentalCar ?? extracted.ferry ?? extracted.event ?? extracted.other;
+  const generic = extracted.bus ?? extracted.rentalCar ?? extracted.ferry ?? extracted.event ?? extracted.other;
   const startTimeZone = generic?.startTimeZone ?? null;
   const endTimeZone = generic?.endTimeZone ?? null;
   const start = createBookingTimePoint({
