@@ -2,11 +2,12 @@ import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import JSZip from "jszip";
 import { randomUUID } from "node:crypto";
-import type { Id } from "../model";
+import type { DocumentRecord, Id } from "../model";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import { SbOrderDocument } from "../reports/sb-order-pdf";
 import { SbFinancialReportDocument } from "../reports/sb-financial-report-pdf";
+import { listDocumentsForUser } from "../rpus/documents";
 import { sendReportReadyEmail } from "../../server/email";
 
 export interface GenerateTripReportInput {
@@ -39,11 +40,7 @@ export async function generateTripReport(
   const user = users.find((u) => u.id === userId);
   if (!user) throw new Error(`User not found: ${userId}`);
 
-  // Load receipt documents for this trip
-  const allDocuments = await state.listDocuments();
-  const receipts = allDocuments.filter(
-    (d) => d.tripId === trip.id && d.isReceipt && !d.deletedAt,
-  );
+  const receipts = await loadTripReportReceipts(state, userId, trip.id);
 
   // Generate PDFs
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,6 +117,19 @@ export async function generateTripReport(
     documentName: null,
     details: { tripId, recipientEmail: user.email, downloadUrl },
   });
+}
+
+export async function loadTripReportReceipts(
+  state: TripStarStateProvider,
+  userId: Id,
+  tripId: Id,
+): Promise<DocumentRecord[]> {
+  const documents = await listDocumentsForUser(state, userId);
+  return selectTripReportReceipts(documents, tripId);
+}
+
+export function selectTripReportReceipts(documents: DocumentRecord[], tripId: Id): DocumentRecord[] {
+  return documents.filter((d) => d.tripId === tripId && d.isReceipt && !d.deletedAt);
 }
 
 function extForMime(mimeType: string | null): string {
