@@ -86,6 +86,8 @@ export function App() {
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [documentViewer, setDocumentViewer] = useState<DocumentOriginalView | null>(null);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
+  const [dirtyBookingIds, setDirtyBookingIds] = useState<Set<string>>(() => new Set());
+  const [discardDraftToken, setDiscardDraftToken] = useState(0);
   const [pendingDeleteBookingId, setPendingDeleteBookingId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<"calendar" | "reports">("calendar");
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -292,45 +294,106 @@ export function App() {
     }
   }
 
-  async function handleUpdateBookingParticipants(booking: CalendarBooking, participantUserIds: string[]) {
-    if (!view) return;
-    const previousView = view;
-    setView({
-      ...view,
-      bookings: view.bookings.map((candidate) => (candidate.id === booking.id ? { ...candidate, participantUserIds } : candidate)),
-    });
-    try {
-      await updateBooking(booking.id, { participantUserIds });
-    } catch (caught) {
-      setView(previousView);
-      setError(caught instanceof Error ? caught.message : "Participants could not be updated.");
-    }
-  }
-
   async function handleSaveBooking(booking: CalendarBooking, input: Partial<CalendarBooking>) {
     if (!view) return;
     const previousView = view;
-    const optimisticBooking = { ...booking, ...input, updatedAt: new Date().toISOString() };
+    const tripId = input.tripId === undefined ? booking.tripId : input.tripId;
+    const trip = view.trips.find((candidate) => candidate.id === tripId) ?? null;
+    const optimisticBooking = {
+      ...booking,
+      ...input,
+      tripId,
+      trip: trip
+        ? {
+            id: trip.id,
+            tripNumber: trip.tripNumber,
+            title: trip.title,
+            color: trip.color,
+          }
+        : null,
+      updatedAt: new Date().toISOString(),
+    };
     setView({
       ...view,
       bookings: view.bookings.map((candidate) => (candidate.id === booking.id ? optimisticBooking : candidate)),
     });
     try {
-      const saved = await updateBooking(booking.id, input);
+      const { tripId: _tripId, trip: _trip, ...bookingInput } = input;
+      const saved = Object.keys(bookingInput).length > 0
+        ? await updateBooking(booking.id, bookingInput)
+        : booking;
+      if (tripId !== booking.tripId) {
+        await assignBookingTrip(booking.id, tripId ?? null);
+      }
       setView((current) =>
         current
           ? {
               ...current,
               bookings: current.bookings.map((candidate) =>
-                candidate.id === booking.id ? { ...candidate, ...saved, trip: candidate.trip } : candidate,
+                candidate.id === booking.id ? { ...candidate, ...saved, tripId, trip: optimisticBooking.trip } : candidate,
               ),
             }
           : current,
       );
+      setDirtyBookingIds((current) => {
+        if (!current.has(booking.id)) return current;
+        const next = new Set(current);
+        next.delete(booking.id);
+        return next;
+      });
+      setExpandedBookingId((current) => (current === booking.id ? null : current));
     } catch (caught) {
       setView(previousView);
       throw caught;
     }
+  }
+
+  function handleBookingDirtyChange(bookingId: string, isDirty: boolean) {
+    setDirtyBookingIds((current) => {
+      const hasValue = current.has(bookingId);
+      if (isDirty === hasValue) return current;
+      const next = new Set(current);
+      if (isDirty) next.add(bookingId);
+      else next.delete(bookingId);
+      return next;
+    });
+  }
+
+  function handleDiscardBookingDraft(bookingId: string) {
+    setDirtyBookingIds((current) => {
+      if (!current.has(bookingId)) return current;
+      const next = new Set(current);
+      next.delete(bookingId);
+      return next;
+    });
+    setDiscardDraftToken((current) => current + 1);
+    setExpandedBookingId((current) => (current === bookingId ? null : current));
+  }
+
+  function handleToggleBooking(id: string) {
+    if (expandedBookingId && expandedBookingId !== id && dirtyBookingIds.has(expandedBookingId)) {
+      const discard = window.confirm("This booking has unsaved changes. Discard them and open another booking?");
+      if (!discard) return;
+      setDirtyBookingIds((current) => {
+        const next = new Set(current);
+        next.delete(expandedBookingId);
+        return next;
+      });
+      setDiscardDraftToken((current) => current + 1);
+    }
+
+    if (expandedBookingId === id && dirtyBookingIds.has(id)) {
+      const discard = window.confirm("This booking has unsaved changes. Discard them and close it?");
+      if (!discard) return;
+      setDirtyBookingIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+      setDiscardDraftToken((current) => current + 1);
+    }
+
+    setExpandedBookingId((current) => (current === id ? null : id));
   }
 
   async function handleDeleteBooking(booking: CalendarBooking) {
@@ -551,10 +614,11 @@ export function App() {
             view={view}
             currentUser={currentUser}
             expandedBookingId={expandedBookingId}
-            onToggleBooking={(id) => setExpandedBookingId((current) => (current === id ? null : id))}
-            onAssign={handleAssignBooking}
-            onUpdateParticipants={handleUpdateBookingParticipants}
+            onToggleBooking={handleToggleBooking}
             onSaveBooking={handleSaveBooking}
+            onBookingDirtyChange={handleBookingDirtyChange}
+            onDiscardBookingDraft={handleDiscardBookingDraft}
+            discardDraftToken={discardDraftToken}
             onDeleteBooking={handleDeleteBooking}
             pendingDeleteBookingId={pendingDeleteBookingId}
             onClearPendingDelete={() => setPendingDeleteBookingId(null)}
@@ -1035,9 +1099,10 @@ function CalendarPanel({
   currentUser,
   expandedBookingId,
   onToggleBooking,
-  onAssign,
-  onUpdateParticipants,
   onSaveBooking,
+  onBookingDirtyChange,
+  onDiscardBookingDraft,
+  discardDraftToken,
   onDeleteBooking,
   pendingDeleteBookingId,
   onClearPendingDelete,
@@ -1049,9 +1114,10 @@ function CalendarPanel({
   currentUser: User;
   expandedBookingId: string | null;
   onToggleBooking: (id: string) => void;
-  onAssign: (booking: CalendarBooking, tripId: string | null) => void;
-  onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
   onSaveBooking: (booking: CalendarBooking, input: Partial<CalendarBooking>) => Promise<void>;
+  onBookingDirtyChange: (bookingId: string, isDirty: boolean) => void;
+  onDiscardBookingDraft: (bookingId: string) => void;
+  discardDraftToken: number;
   onDeleteBooking: (booking: CalendarBooking) => void;
   pendingDeleteBookingId: string | null;
   onClearPendingDelete: () => void;
@@ -1144,9 +1210,10 @@ function CalendarPanel({
                     booking={booking}
                     expandedBookingId={expandedBookingId}
                     onToggleBooking={onToggleBooking}
-                    onAssign={onAssign}
-                    onUpdateParticipants={onUpdateParticipants}
                     onSaveBooking={onSaveBooking}
+                    onDirtyChange={onBookingDirtyChange}
+                    onDiscardDraft={onDiscardBookingDraft}
+                    discardDraftToken={discardDraftToken}
                     onDeleteBooking={onDeleteBooking}
                     isDeletePending={pendingDeleteBookingId === booking.id}
                     onClearPendingDelete={onClearPendingDelete}
@@ -1208,9 +1275,10 @@ function BookingCard({
   booking,
   expandedBookingId,
   onToggleBooking,
-  onAssign,
-  onUpdateParticipants,
   onSaveBooking,
+  onDirtyChange,
+  onDiscardDraft,
+  discardDraftToken,
   onDeleteBooking,
   isDeletePending,
   onClearPendingDelete,
@@ -1223,9 +1291,10 @@ function BookingCard({
   booking: CalendarBooking;
   expandedBookingId: string | null;
   onToggleBooking: (id: string) => void;
-  onAssign: (booking: CalendarBooking, tripId: string | null) => void;
-  onUpdateParticipants: (booking: CalendarBooking, participantUserIds: string[]) => void;
   onSaveBooking: (booking: CalendarBooking, input: Partial<CalendarBooking>) => Promise<void>;
+  onDirtyChange: (bookingId: string, isDirty: boolean) => void;
+  onDiscardDraft: (bookingId: string) => void;
+  discardDraftToken: number;
   onDeleteBooking: (booking: CalendarBooking) => void;
   isDeletePending: boolean;
   onClearPendingDelete: () => void;
@@ -1235,14 +1304,15 @@ function BookingCard({
   users: User[];
   currentUserId: string;
 }) {
-  const fullTrip = visibleTrips.find((trip) => trip.id === booking.tripId) ?? null;
-  const allowedUsers = allowedParticipantUsers(fullTrip, users, currentUserId);
   const startPoint = firstTimePoint(booking, ["departure", "start", "check_in"]);
   const endPoint = firstTimePoint(booking, ["arrival", "end", "check_out"]);
   const [draft, setDraft] = useState(() => bookingDraftFromBooking(booking));
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const draftDirty = isBookingDraftDirty(booking, draft);
+  const fullTrip = visibleTrips.find((trip) => trip.id === booking.tripId) ?? null;
+  const draftTrip = visibleTrips.find((trip) => trip.id === draft.tripId) ?? null;
+  const allowedUsers = allowedParticipantUsers(draftTrip, users, currentUserId);
 
   useEffect(() => {
     setDraft(bookingDraftFromBooking(booking));
@@ -1258,7 +1328,34 @@ function BookingCard({
     booking.operator,
     booking.serviceIdentifier,
     booking.details,
+    booking.tripId,
+    booking.participantUserIds,
   ]);
+
+  useEffect(() => {
+    setDraft(bookingDraftFromBooking(booking));
+    setDraftError(null);
+    onDirtyChange(booking.id, false);
+  }, [discardDraftToken]);
+
+  useEffect(() => {
+    onDirtyChange(booking.id, draftDirty);
+    return () => onDirtyChange(booking.id, false);
+  }, [booking.id, draftDirty]);
+
+  function updateDraftTrip(tripId: string | null) {
+    const nextTrip = visibleTrips.find((trip) => trip.id === tripId) ?? null;
+    const allowedIds = allowedParticipantUsers(nextTrip, users, currentUserId).map((user) => user.id);
+    const retainedParticipantUserIds = draft.participantUserIds.filter((userId) => allowedIds.includes(userId));
+    const participantUserIds = tripId === null
+      ? [currentUserId]
+      : retainedParticipantUserIds.length > 0
+        ? retainedParticipantUserIds
+        : allowedIds.includes(currentUserId)
+          ? [currentUserId]
+          : [];
+    setDraft({ ...draft, tripId, participantUserIds });
+  }
 
   async function saveDraft() {
     setIsSavingDraft(true);
@@ -1396,8 +1493,8 @@ function BookingCard({
 
           <ParticipantPicker
             allowedUsers={allowedUsers}
-            selectedUserIds={booking.participantUserIds}
-            onChange={(participantUserIds) => onUpdateParticipants(booking, participantUserIds)}
+            selectedUserIds={draft.participantUserIds}
+            onChange={(participantUserIds) => setDraft({ ...draft, participantUserIds })}
           />
 
           <div className="detail-actions">
@@ -1407,6 +1504,18 @@ function BookingCard({
                 {isSavingDraft ? <LoaderCircle className="button-spinner" size={16} aria-hidden="true" /> : <Check size={16} />}
                 {isSavingDraft ? "Saving" : draftDirty ? "Save changes" : "Saved"}
               </button>
+              {draftDirty && (
+                <button
+                  type="button"
+                  className="booking-discard-button"
+                  onClick={() => onDiscardDraft(booking.id)}
+                  disabled={isSavingDraft}
+                  aria-label="Discard unsaved booking changes"
+                  title="Discard changes"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
             <label className="field-label">
               Trip
@@ -1419,7 +1528,7 @@ function BookingCard({
                   title="You cannot reassign this booking — you are not the trip owner."
                 />
               ) : (
-                <select value={booking.tripId ?? ""} onChange={(event) => onAssign(booking, event.target.value || null)}>
+                <select value={draft.tripId ?? ""} onChange={(event) => updateDraftTrip(event.target.value || null)}>
                   <option value="">No trip</option>
                   {assignableTrips.map((trip) => (
                     <option key={trip.id} value={trip.id}>
@@ -1523,6 +1632,7 @@ function stableHash(value: string): number {
 }
 
 interface BookingDraft {
+  tripId: string | null;
   type: CalendarBooking["type"];
   title: string;
   startAt: string;
@@ -1532,12 +1642,14 @@ interface BookingDraft {
   operator: string;
   serviceIdentifier: string;
   details: string;
+  participantUserIds: string[];
 }
 
 function bookingDraftFromBooking(booking: CalendarBooking): BookingDraft {
   const startPoint = firstTimePoint(booking, ["departure", "start", "check_in"]);
   const endPoint = firstTimePoint(booking, ["arrival", "end", "check_out"]);
   return {
+    tripId: booking.tripId,
     type: booking.type,
     title: booking.title,
     startAt: startPoint?.localDateTime ?? toDateTimeLocalValue(booking.startAt),
@@ -1547,6 +1659,7 @@ function bookingDraftFromBooking(booking: CalendarBooking): BookingDraft {
     operator: booking.operator ?? "",
     serviceIdentifier: booking.serviceIdentifier ?? "",
     details: booking.details,
+    participantUserIds: [...booking.participantUserIds],
   };
 }
 
@@ -1569,6 +1682,8 @@ function bookingInputFromDraft(draft: BookingDraft, booking: CalendarBooking): P
     operator: nullableText(draft.operator),
     serviceIdentifier: nullableText(draft.serviceIdentifier),
     details: draft.details.trim(),
+    participantUserIds: draft.participantUserIds,
+    tripId: draft.tripId,
   };
 }
 
@@ -1606,8 +1721,15 @@ function isBookingDraftDirty(booking: CalendarBooking, draft: BookingDraft): boo
     input.toText !== booking.toText ||
     input.operator !== booking.operator ||
     input.serviceIdentifier !== booking.serviceIdentifier ||
-    input.details !== booking.details
+    input.details !== booking.details ||
+    input.tripId !== booking.tripId ||
+    !sameStringSet(input.participantUserIds ?? [], booking.participantUserIds)
   );
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((value) => right.includes(value));
 }
 
 function formatTimeZoneLabel(timeZone: string): string {

@@ -887,6 +887,30 @@ textarea:disabled {
   gap: 10px;
 }
 
+.booking-discard-button {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfd8df;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #667085;
+  cursor: pointer;
+}
+
+.booking-discard-button:hover {
+  border-color: #aebbc6;
+  background: #f6f8fa;
+  color: #18212f;
+}
+
+.booking-discard-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .inline-error {
   color: #8a1f1f;
   font-size: 13px;
