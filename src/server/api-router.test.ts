@@ -154,6 +154,60 @@ describe("API router", () => {
     await expect(profileResponse.json()).resolves.toMatchObject({ user: { shortCode: "PF" } });
   });
 
+  it("manages secondary ingest email addresses for the current user", async () => {
+    const otpResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/request-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ingest@example.com" }),
+      }),
+    );
+    const otpBody = await otpResponse.json();
+    const verifyResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ingest@example.com", otp: otpBody.devOtp }),
+      }),
+    );
+    const verifyBody = await verifyResponse.json();
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${verifyBody.session.token}`,
+    };
+
+    const listResponse = await handleApiRequest(new Request("http://localhost/api/auth/ingest-emails", { headers }));
+    await expect(listResponse.json()).resolves.toMatchObject([{ email: "ingest@example.com", isPrimary: true }]);
+
+    const requestSecondaryResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/request-ingest-email-otp", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ email: "other@example.com" }),
+      }),
+    );
+    const requestSecondaryBody = await requestSecondaryResponse.json();
+    const verifySecondaryResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/verify-ingest-email", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ email: "other@example.com", otp: requestSecondaryBody.devOtp }),
+      }),
+    );
+
+    expect(verifySecondaryResponse.status).toBe(200);
+    await expect(verifySecondaryResponse.json()).resolves.toMatchObject({ emailAddress: { email: "other@example.com", isPrimary: false } });
+
+    const deleteResponse = await handleApiRequest(
+      new Request("http://localhost/api/auth/ingest-emails", {
+        method: "DELETE",
+        headers,
+        body: JSON.stringify({ email: "other@example.com" }),
+      }),
+    );
+    expect(deleteResponse.status).toBe(200);
+  });
+
   it("creates trips through POST /api/trips", async () => {
     const response = await handleApiRequest(
       new Request("http://localhost/api/trips", {

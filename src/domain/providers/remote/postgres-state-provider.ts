@@ -8,6 +8,7 @@ import type {
   CalendarView,
   DocumentRecord,
   Id,
+  IngestEmailAddress,
   IngestPart,
   OtpChallenge,
   Trip,
@@ -26,6 +27,7 @@ import type {
   UpdateTripInput,
   UpdateUserProfileInput,
   VerifyOtpResult,
+  VerifyIngestEmailResult,
 } from "../state-provider";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { getCurrentUserId } from "../user-context";
@@ -92,6 +94,8 @@ export class PostgresStateProvider implements TripStarStateProvider {
       id: `otp_${randomUUID()}`,
       email,
       otp,
+      purpose: "login",
+      userId: null,
       expiresAt,
       consumedAt: null,
       createdAt: timestamp.toISOString(),
@@ -123,7 +127,7 @@ export class PostgresStateProvider implements TripStarStateProvider {
       const rows = await this.sql`
         select data
         from otp_challenges
-        where email = ${email} and consumed_at is null
+        where email = ${email} and consumed_at is null and ((data->>'purpose') is null or data->>'purpose' = 'login')
         order by created_at desc
         limit 1
       `;
@@ -159,6 +163,115 @@ export class PostgresStateProvider implements TripStarStateProvider {
       details: { userId: user.id },
     });
     return { user: clone(user), session: clone(session) };
+  }
+
+  async listIngestEmailAddresses(userId: Id): Promise<IngestEmailAddress[]> {
+    await this.ready;
+    const user = await this.requireUser(userId);
+    const rows = await this.sql`select data from ingest_email_addresses where user_id = ${userId} order by is_primary desc, email`;
+    const addresses = rows.map((row) => row.data as IngestEmailAddress);
+    if (addresses.some((candidate) => candidate.email === user.email && candidate.isPrimary)) {
+      return addresses;
+    }
+    return [
+      { email: user.email, userId: user.id, isPrimary: true, createdAt: user.createdAt },
+      ...addresses,
+    ].sort(sortIngestEmailAddresses);
+  }
+
+  async requestIngestEmailOtp(userId: Id, emailInput: string): Promise<RequestOtpResult> {
+    await this.ready;
+    await this.requireUser(userId);
+    const email = normalizeEmail(emailInput);
+    await this.assertIngestEmailCanBeAdded(userId, email);
+    const timestamp = this.now();
+    const expiresAt = new Date(timestamp.getTime() + 5 * 60 * 1000).toISOString();
+    const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const challenge: OtpChallenge = {
+      id: `otp_${randomUUID()}`,
+      email,
+      otp,
+      purpose: "ingest_email",
+      userId,
+      expiresAt,
+      consumedAt: null,
+      createdAt: timestamp.toISOString(),
+    };
+    await this.sql`
+      insert into otp_challenges (id, email, otp, expires_at, consumed_at, created_at, data)
+      values (${challenge.id}, ${challenge.email}, ${challenge.otp}, ${challenge.expiresAt}, null, ${challenge.createdAt}, ${toJson(challenge)})
+    `;
+    await this.appendActivity({
+      level: "info",
+      scope: "profile",
+      message: "Requested ingest email verification OTP",
+      documentName: null,
+      details: { email },
+    });
+    return { email, expiresAt, devOtp: otp };
+  }
+
+  async verifyIngestEmailOtp(userId: Id, emailInput: string, otp: string): Promise<VerifyIngestEmailResult> {
+    await this.ready;
+    await this.requireUser(userId);
+    const email = normalizeEmail(emailInput);
+    await this.assertIngestEmailCanBeAdded(userId, email);
+    const now = this.now();
+    const rows = await this.sql`
+      select data
+      from otp_challenges
+      where email = ${email}
+        and consumed_at is null
+        and data->>'purpose' = 'ingest_email'
+        and data->>'userId' = ${userId}
+      order by created_at desc
+      limit 1
+    `;
+    const challenge = rows[0]?.data as OtpChallenge | undefined;
+    if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
+      throw new Error("Invalid or expired OTP.");
+    }
+    const consumedChallenge: OtpChallenge = { ...challenge, consumedAt: now.toISOString() };
+    await this.sql`
+      update otp_challenges
+      set consumed_at = ${consumedChallenge.consumedAt}, data = ${toJson(consumedChallenge)}
+      where id = ${challenge.id}
+    `;
+    const emailAddress: IngestEmailAddress = {
+      email,
+      userId,
+      isPrimary: false,
+      createdAt: now.toISOString(),
+    };
+    await this.sql`
+      insert into ingest_email_addresses (email, user_id, is_primary, created_at, data)
+      values (${emailAddress.email}, ${emailAddress.userId}, ${emailAddress.isPrimary}, ${emailAddress.createdAt}, ${toJson(emailAddress)})
+    `;
+    await this.appendActivity({
+      level: "info",
+      scope: "profile",
+      message: "Added secondary ingest email address",
+      documentName: null,
+      details: { email },
+    });
+    return { emailAddress: clone(emailAddress) };
+  }
+
+  async deleteSecondaryIngestEmail(userId: Id, emailInput: string): Promise<void> {
+    await this.ready;
+    const email = normalizeEmail(emailInput);
+    const rows = await this.sql`select data from ingest_email_addresses where email = ${email} and user_id = ${userId} limit 1`;
+    const address = rows[0]?.data as IngestEmailAddress | undefined;
+    if (!address) return;
+    if (address.isPrimary) throw new Error("Primary ingest email address cannot be deleted.");
+    await this.sql`delete from ingest_email_addresses where email = ${email} and user_id = ${userId}`;
+    await this.appendActivity({
+      level: "info",
+      scope: "profile",
+      message: "Deleted secondary ingest email address",
+      documentName: null,
+      details: { email },
+    });
   }
 
   async getAuthSession(token: string): Promise<VerifyOtpResult | null> {
@@ -603,6 +716,14 @@ export class PostgresStateProvider implements TripStarStateProvider {
       data jsonb not null
     )`;
     await this.sql`create index if not exists otp_challenges_email_created_idx on otp_challenges (email, created_at desc)`;
+    await this.sql`create table if not exists ingest_email_addresses (
+      email text primary key,
+      user_id text not null,
+      is_primary boolean not null,
+      created_at timestamptz not null,
+      data jsonb not null
+    )`;
+    await this.sql`create index if not exists ingest_email_addresses_user_idx on ingest_email_addresses (user_id)`;
     await this.sql`create table if not exists auth_sessions (
       token text primary key,
       user_id text not null,
@@ -726,7 +847,33 @@ export class PostgresStateProvider implements TripStarStateProvider {
       insert into users (id, email, created_at, updated_at, data)
       values (${user.id}, ${user.email}, ${user.createdAt}, ${user.updatedAt}, ${toJson(user)})
     `;
+    const ingestEmail: IngestEmailAddress = {
+      email: user.email,
+      userId: user.id,
+      isPrimary: true,
+      createdAt: user.createdAt,
+    };
+    await this.sql`
+      insert into ingest_email_addresses (email, user_id, is_primary, created_at, data)
+      values (${ingestEmail.email}, ${ingestEmail.userId}, ${ingestEmail.isPrimary}, ${ingestEmail.createdAt}, ${toJson(ingestEmail)})
+      on conflict (email) do nothing
+    `;
     return user;
+  }
+
+  private async assertIngestEmailCanBeAdded(userId: Id, email: string): Promise<void> {
+    const loginRows = await this.sql`select id from users where email = ${email} limit 1`;
+    const loginOwner = loginRows[0]?.id as string | undefined;
+    if (loginOwner && loginOwner !== userId) {
+      throw new Error("This email address is already used by another user.");
+    }
+    if (loginOwner && loginOwner === userId) {
+      throw new Error("This email address is already your primary login address.");
+    }
+    const ingestRows = await this.sql`select user_id from ingest_email_addresses where email = ${email} limit 1`;
+    if (ingestRows.length > 0) {
+      throw new Error("This email address is already allowed for email ingest.");
+    }
   }
 
   private async nextTripNumber(): Promise<string> {
@@ -755,6 +902,11 @@ export class PostgresStateProvider implements TripStarStateProvider {
 
 function toJson(value: unknown): string {
   return JSON.stringify(value);
+}
+
+function sortIngestEmailAddresses(left: IngestEmailAddress, right: IngestEmailAddress): number {
+  if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+  return left.email.localeCompare(right.email);
 }
 
 function normalizeEmail(email: string): string {

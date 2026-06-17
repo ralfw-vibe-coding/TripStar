@@ -292,6 +292,41 @@ describe("LocalStateProvider", () => {
     });
     expect(verified.user).not.toHaveProperty("displayName");
     expect(session?.user.email).toBe("ralf@example.com");
+    await expect(provider.listIngestEmailAddresses(verified.user.id)).resolves.toMatchObject([
+      { email: "ralf@example.com", userId: verified.user.id, isPrimary: true },
+    ]);
+  });
+
+  it("verifies and deletes secondary ingest email addresses", async () => {
+    const provider = new LocalStateProvider({ now: () => fixedNow });
+    const requestedLogin = await provider.requestLoginOtp("ralf@example.com");
+    const verified = await provider.verifyLoginOtp("ralf@example.com", requestedLogin.devOtp ?? "");
+
+    const requestedIngestEmail = await provider.requestIngestEmailOtp(verified.user.id, "Work@Example.com");
+    const result = await provider.verifyIngestEmailOtp(verified.user.id, "work@example.com", requestedIngestEmail.devOtp ?? "");
+
+    expect(result.emailAddress).toMatchObject({ email: "work@example.com", userId: verified.user.id, isPrimary: false });
+    await expect(provider.listIngestEmailAddresses(verified.user.id)).resolves.toMatchObject([
+      { email: "ralf@example.com", isPrimary: true },
+      { email: "work@example.com", isPrimary: false },
+    ]);
+
+    await provider.deleteSecondaryIngestEmail(verified.user.id, "work@example.com");
+    await expect(provider.listIngestEmailAddresses(verified.user.id)).resolves.toMatchObject([
+      { email: "ralf@example.com", isPrimary: true },
+    ]);
+  });
+
+  it("keeps ingest email addresses unique across users", async () => {
+    const provider = new LocalStateProvider({
+      now: () => fixedNow,
+      users: [
+        { id: "user_a", email: "a@example.com", shortCode: "A", name: null, companyName: null, jobPosition: null, signatureEmployee: null, signatureManager: null, createdAt: fixedIso, updatedAt: fixedIso },
+        { id: "user_b", email: "b@example.com", shortCode: "B", name: null, companyName: null, jobPosition: null, signatureEmployee: null, signatureManager: null, createdAt: fixedIso, updatedAt: fixedIso },
+      ],
+    });
+
+    await expect(provider.requestIngestEmailOtp("user_a", "b@example.com")).rejects.toThrow("another user");
   });
 
   it("updates a user's profile code", async () => {

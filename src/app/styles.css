@@ -1356,6 +1356,58 @@ textarea:disabled {
   font-weight: 700;
 }
 
+.profile-section {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.profile-section h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.ingest-email-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ingest-email-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #d9e0e5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ingest-email-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ingest-email-row strong {
+  padding: 3px 8px;
+  border: 1px solid #cfd8df;
+  border-radius: 999px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.ingest-email-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+}
+
 .dialog-actions {
   justify-content: flex-end;
 }

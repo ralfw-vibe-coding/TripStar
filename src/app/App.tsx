@@ -37,6 +37,7 @@ import {
   useState,
 } from "react";
 import type { ActivityLogEntry, AnalysisJob, CalendarBooking, CalendarView, DailyAllowance, DocumentRecord, Trip, User } from "../domain/model";
+import type { IngestEmailAddress } from "../domain/model";
 import { DAILY_ALLOWANCES, type CountryAllowance } from "./daily-allowances-data";
 import {
   assignBookingTrip,
@@ -44,15 +45,18 @@ import {
   createTrip,
   deleteBooking,
   deleteDocument as deleteDocumentApi,
+  deleteIngestEmail,
   fetchAnalysisJobs,
   fetchActivityLog,
   fetchCalendar,
   fetchCurrentUser,
   fetchDocumentOriginal,
   fetchDocuments,
+  fetchIngestEmailAddresses,
   getStoredAuthToken,
   logout,
   requestOtp,
+  requestIngestEmailOtp,
   storeAuthToken,
   submitImageDocument,
   submitPdfDocuments,
@@ -64,6 +68,7 @@ import {
   updateProfile,
   updateTrip,
   verifyOtp,
+  verifyIngestEmail,
 } from "./api";
 import { tripColor } from "./trip-colors";
 import { ownTripsForUser, sharedTripsForUser } from "./trip-filters";
@@ -830,6 +835,25 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
   const [signatureManager, setSignatureManager] = useState<string | null>(user.signatureManager ?? null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [ingestEmails, setIngestEmails] = useState<IngestEmailAddress[]>([]);
+  const [isLoadingIngestEmails, setIsLoadingIngestEmails] = useState(true);
+  const [newIngestEmail, setNewIngestEmail] = useState("");
+  const [pendingIngestEmail, setPendingIngestEmail] = useState<string | null>(null);
+  const [ingestEmailOtp, setIngestEmailOtp] = useState("");
+  const [ingestEmailDevOtp, setIngestEmailDevOtp] = useState<string | null>(null);
+  const [ingestEmailMessage, setIngestEmailMessage] = useState<string | null>(null);
+  const [isIngestEmailBusy, setIsIngestEmailBusy] = useState(false);
+
+  useEffect(() => {
+    setIsLoadingIngestEmails(true);
+    void reloadIngestEmailAddresses()
+      .catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load ingest email addresses."))
+      .finally(() => setIsLoadingIngestEmails(false));
+  }, []);
+
+  async function reloadIngestEmailAddresses() {
+    setIngestEmails((await fetchIngestEmailAddresses()).sort(sortIngestEmailAddresses));
+  }
 
   function handleSignatureUpload(event: React.ChangeEvent<HTMLInputElement>, setter: (v: string | null) => void) {
     const file = event.target.files?.[0];
@@ -865,6 +889,56 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
       setError(caught instanceof Error ? caught.message : "Could not save profile.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleRequestIngestEmailOtp() {
+    setError(null);
+    setIngestEmailMessage(null);
+    setIsIngestEmailBusy(true);
+    try {
+      const result = await requestIngestEmailOtp(newIngestEmail);
+      setPendingIngestEmail(result.email);
+      setIngestEmailDevOtp(result.devOtp ?? null);
+      setIngestEmailOtp("");
+      setIngestEmailMessage(`Verification code sent to ${result.email}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not request verification code.");
+    } finally {
+      setIsIngestEmailBusy(false);
+    }
+  }
+
+  async function handleVerifyIngestEmail() {
+    if (!pendingIngestEmail) return;
+    setError(null);
+    setIsIngestEmailBusy(true);
+    try {
+      await verifyIngestEmail(pendingIngestEmail, ingestEmailOtp);
+      await reloadIngestEmailAddresses();
+      setNewIngestEmail("");
+      setPendingIngestEmail(null);
+      setIngestEmailOtp("");
+      setIngestEmailDevOtp(null);
+      setIngestEmailMessage("Email address added for email ingest.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not verify email address.");
+    } finally {
+      setIsIngestEmailBusy(false);
+    }
+  }
+
+  async function handleDeleteIngestEmail(email: string) {
+    setError(null);
+    setIsIngestEmailBusy(true);
+    try {
+      await deleteIngestEmail(email);
+      setIngestEmails((current) => current.filter((candidate) => candidate.email !== email));
+      setIngestEmailMessage("Email address removed.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete email address.");
+    } finally {
+      setIsIngestEmailBusy(false);
     }
   }
 
@@ -939,6 +1013,113 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
           </div>
         </div>
 
+        <section className="profile-section">
+          <div>
+            <h3>Email ingest addresses</h3>
+            <p className="muted-small">Forwarded booking emails are accepted from these addresses after verification.</p>
+          </div>
+
+          <div className="ingest-email-list">
+            {isLoadingIngestEmails ? (
+              <p className="muted-small">Loading email addresses...</p>
+            ) : (
+              ingestEmails.map((address) => (
+                <div className="ingest-email-row" key={address.email}>
+                  <span>{address.email}</span>
+                  <strong>{address.isPrimary ? "prim." : "2nd"}</strong>
+                  {!address.isPrimary && (
+                    <button
+                      type="button"
+                      className="icon-command"
+                      disabled={isIngestEmailBusy}
+                      onClick={() => handleDeleteIngestEmail(address.email)}
+                      aria-label={`Delete ${address.email}`}
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {!pendingIngestEmail ? (
+            <div className="ingest-email-add">
+              <label className="field-label">
+                Add secondary address
+                <input
+                  type="email"
+                  value={newIngestEmail}
+                  onChange={(event) => setNewIngestEmail(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (!isIngestEmailBusy && newIngestEmail.trim().length > 0) void handleRequestIngestEmailOtp();
+                    }
+                  }}
+                  disabled={isIngestEmailBusy}
+                  placeholder="name@example.com"
+                />
+              </label>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isIngestEmailBusy || newIngestEmail.trim().length === 0}
+                onClick={handleRequestIngestEmailOtp}
+              >
+                Send code
+              </button>
+            </div>
+          ) : (
+            <div className="ingest-email-add">
+              <label className="field-label">
+                Verification code for {pendingIngestEmail}
+                <input
+                  type="text"
+                  inputMode="text"
+                  value={ingestEmailOtp}
+                  onChange={(event) => setIngestEmailOtp(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (!isIngestEmailBusy && ingestEmailOtp.trim().length > 0) void handleVerifyIngestEmail();
+                    }
+                  }}
+                  disabled={isIngestEmailBusy}
+                  autoComplete="one-time-code"
+                />
+              </label>
+              <button
+                type="button"
+                className="icon-command"
+                disabled={isIngestEmailBusy || ingestEmailOtp.trim().length === 0}
+                onClick={handleVerifyIngestEmail}
+                aria-label="Verify email address"
+                title="Verify"
+              >
+                <Check size={14} />
+              </button>
+              <button
+                type="button"
+                className="icon-command"
+                disabled={isIngestEmailBusy}
+                onClick={() => {
+                  setPendingIngestEmail(null);
+                  setIngestEmailOtp("");
+                  setIngestEmailDevOtp(null);
+                }}
+                aria-label="Cancel email verification"
+                title="Cancel"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          {ingestEmailDevOtp && <div className="dev-otp">Local code: {ingestEmailDevOtp}</div>}
+          {ingestEmailMessage && <p className="muted-small">{ingestEmailMessage}</p>}
+        </section>
+
         {error && <div className="notice">{error}</div>}
 
         <footer className="dialog-actions">
@@ -954,6 +1135,11 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
       </form>
     </div>
   );
+}
+
+function sortIngestEmailAddresses(left: IngestEmailAddress, right: IngestEmailAddress): number {
+  if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+  return left.email.localeCompare(right.email);
 }
 
 function ActivityLogDialog({ analysisJobs, onClose }: { analysisJobs: AnalysisJob[]; onClose: () => void }) {

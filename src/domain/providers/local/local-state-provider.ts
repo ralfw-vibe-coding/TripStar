@@ -7,6 +7,7 @@ import type {
   CalendarView,
   DocumentRecord,
   Id,
+  IngestEmailAddress,
   IngestPart,
   OtpChallenge,
   Trip,
@@ -25,6 +26,7 @@ import type {
   UpdateDocumentInput,
   UpdateTripInput,
   VerifyOtpResult,
+  VerifyIngestEmailResult,
 } from "../state-provider";
 import { createId } from "./id";
 import { seedBookings, seedDocuments, seedTrips, seedUsers } from "./seed";
@@ -41,6 +43,7 @@ interface LocalStateProviderOptions {
   analysisJobs?: AnalysisJob[];
   activity?: ActivityLogEntry[];
   otpChallenges?: OtpChallenge[];
+  ingestEmailAddresses?: IngestEmailAddress[];
   authSessions?: AuthSession[];
   initialTripNumber?: number;
   now?: () => Date;
@@ -55,6 +58,7 @@ interface PersistedLocalState {
   analysisJobs?: AnalysisJob[];
   activity: ActivityLogEntry[];
   otpChallenges?: OtpChallenge[];
+  ingestEmailAddresses?: IngestEmailAddress[];
   authSessions?: AuthSession[];
 }
 
@@ -74,6 +78,7 @@ export class LocalStateProvider implements TripStarStateProvider {
   private analysisJobs: AnalysisJob[] = [];
   private activity: ActivityLogEntry[] = [];
   private otpChallenges: OtpChallenge[] = [];
+  private ingestEmailAddresses: IngestEmailAddress[] = [];
   private authSessions: AuthSession[] = [];
   private ingestParts: Map<string, Array<{ part: IngestPart; receivedAt: Date }>> = new Map();
   private now: () => Date;
@@ -88,7 +93,8 @@ export class LocalStateProvider implements TripStarStateProvider {
     this.documents = this.normalizeDocuments(clone(options.documents ?? persisted?.documents ?? seedDocuments));
     this.analysisJobs = clone(options.analysisJobs ?? persisted?.analysisJobs ?? []);
     this.activity = clone(options.activity ?? persisted?.activity ?? []);
-    this.otpChallenges = clone(options.otpChallenges ?? persisted?.otpChallenges ?? []);
+    this.otpChallenges = this.normalizeOtpChallenges(clone(options.otpChallenges ?? persisted?.otpChallenges ?? []));
+    this.ingestEmailAddresses = clone(options.ingestEmailAddresses ?? persisted?.ingestEmailAddresses ?? []);
     this.authSessions = clone(options.authSessions ?? persisted?.authSessions ?? []);
     this.now = options.now ?? (() => new Date());
     this.stateFilePath = options.stateFilePath ?? null;
@@ -132,6 +138,8 @@ export class LocalStateProvider implements TripStarStateProvider {
       id: createId("otp"),
       email,
       otp,
+      purpose: "login",
+      userId: null,
       expiresAt,
       consumedAt: null,
       createdAt: timestamp.toISOString(),
@@ -160,7 +168,7 @@ export class LocalStateProvider implements TripStarStateProvider {
     if (!isAdminOtp) {
       const challenge = [...this.otpChallenges]
         .reverse()
-        .find((candidate) => candidate.email === email && candidate.consumedAt === null);
+        .find((candidate) => candidate.email === email && candidate.consumedAt === null && (candidate.purpose ?? "login") === "login");
       if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
         throw new Error("Invalid or expired OTP.");
       }
@@ -186,6 +194,94 @@ export class LocalStateProvider implements TripStarStateProvider {
     });
     this.persist();
     return { user: clone(user), session: clone(session) };
+  }
+
+  async listIngestEmailAddresses(userId: Id): Promise<IngestEmailAddress[]> {
+    const user = this.users.find((candidate) => candidate.id === userId);
+    if (!user) throw new Error(`User not found: ${userId}`);
+    return clone(this.ingestEmailsForUser(user));
+  }
+
+  async requestIngestEmailOtp(userId: Id, emailInput: string): Promise<RequestOtpResult> {
+    const user = this.users.find((candidate) => candidate.id === userId);
+    if (!user) throw new Error(`User not found: ${userId}`);
+    const email = normalizeEmail(emailInput);
+    this.assertIngestEmailCanBeAdded(userId, email);
+    const timestamp = this.now();
+    const expiresAt = new Date(timestamp.getTime() + 5 * 60 * 1000).toISOString();
+    const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    this.otpChallenges.push({
+      id: createId("otp"),
+      email,
+      otp,
+      purpose: "ingest_email",
+      userId,
+      expiresAt,
+      consumedAt: null,
+      createdAt: timestamp.toISOString(),
+    });
+    await this.appendActivity({
+      level: "info",
+      scope: "profile",
+      message: "Requested ingest email verification OTP",
+      documentName: null,
+      details: { email },
+    });
+    this.persist();
+    return { email, expiresAt, devOtp: otp };
+  }
+
+  async verifyIngestEmailOtp(userId: Id, emailInput: string, otp: string): Promise<VerifyIngestEmailResult> {
+    const user = this.users.find((candidate) => candidate.id === userId);
+    if (!user) throw new Error(`User not found: ${userId}`);
+    const email = normalizeEmail(emailInput);
+    this.assertIngestEmailCanBeAdded(userId, email);
+    const now = this.now();
+    const challenge = [...this.otpChallenges]
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.email === email &&
+          candidate.userId === userId &&
+          candidate.consumedAt === null &&
+          candidate.purpose === "ingest_email",
+      );
+    if (!challenge || challenge.otp !== otp.trim() || new Date(challenge.expiresAt) < now) {
+      throw new Error("Invalid or expired OTP.");
+    }
+    challenge.consumedAt = now.toISOString();
+    const emailAddress: IngestEmailAddress = {
+      email,
+      userId,
+      isPrimary: false,
+      createdAt: now.toISOString(),
+    };
+    this.ingestEmailAddresses.push(emailAddress);
+    await this.appendActivity({
+      level: "info",
+      scope: "profile",
+      message: "Added secondary ingest email address",
+      documentName: null,
+      details: { email },
+    });
+    this.persist();
+    return { emailAddress: clone(emailAddress) };
+  }
+
+  async deleteSecondaryIngestEmail(userId: Id, emailInput: string): Promise<void> {
+    const email = normalizeEmail(emailInput);
+    const existing = this.ingestEmailAddresses.find((candidate) => candidate.email === email && candidate.userId === userId);
+    if (!existing) return;
+    if (existing.isPrimary) throw new Error("Primary ingest email address cannot be deleted.");
+    this.ingestEmailAddresses = this.ingestEmailAddresses.filter((candidate) => candidate.email !== email);
+    await this.appendActivity({
+      level: "info",
+      scope: "profile",
+      message: "Deleted secondary ingest email address",
+      documentName: null,
+      details: { email },
+    });
+    this.persist();
   }
 
   async getAuthSession(token: string): Promise<VerifyOtpResult | null> {
@@ -679,6 +775,7 @@ export class LocalStateProvider implements TripStarStateProvider {
           analysisJobs: this.analysisJobs,
           activity: this.activity,
           otpChallenges: this.otpChallenges,
+          ingestEmailAddresses: this.ingestEmailAddresses,
           authSessions: this.authSessions,
         },
         null,
@@ -718,13 +815,68 @@ export class LocalStateProvider implements TripStarStateProvider {
       updatedAt: timestamp,
     };
     this.users.push(user);
+    this.ensurePrimaryIngestEmail(user);
     return user;
+  }
+
+  private ingestEmailsForUser(user: User): IngestEmailAddress[] {
+    const existing = this.ingestEmailAddresses.filter((candidate) => candidate.userId === user.id);
+    if (existing.some((candidate) => candidate.email === user.email && candidate.isPrimary)) {
+      return existing.sort(sortIngestEmailAddresses);
+    }
+    return [
+      {
+        email: user.email,
+        userId: user.id,
+        isPrimary: true,
+        createdAt: user.createdAt,
+      },
+      ...existing,
+    ].sort(sortIngestEmailAddresses);
+  }
+
+  private ensurePrimaryIngestEmail(user: User): void {
+    const existing = this.ingestEmailAddresses.find((candidate) => candidate.email === user.email);
+    if (existing) return;
+    this.ingestEmailAddresses.push({
+      email: user.email,
+      userId: user.id,
+      isPrimary: true,
+      createdAt: user.createdAt,
+    });
+  }
+
+  private assertIngestEmailCanBeAdded(userId: Id, email: string): void {
+    const loginOwner = this.users.find((candidate) => candidate.email === email);
+    if (loginOwner && loginOwner.id !== userId) {
+      throw new Error("This email address is already used by another user.");
+    }
+    if (loginOwner && loginOwner.id === userId) {
+      throw new Error("This email address is already your primary login address.");
+    }
+    const ingestOwner = this.ingestEmailAddresses.find((candidate) => candidate.email === email);
+    if (ingestOwner) {
+      throw new Error("This email address is already allowed for email ingest.");
+    }
+  }
+
+  private normalizeOtpChallenges(challenges: OtpChallenge[]): OtpChallenge[] {
+    return challenges.map((challenge) => ({
+      ...challenge,
+      purpose: challenge.purpose ?? "login",
+      userId: challenge.userId ?? null,
+    }));
   }
 
   private createSessionToken(): string {
     return randomBytes(32).toString("base64url");
   }
 
+}
+
+function sortIngestEmailAddresses(left: IngestEmailAddress, right: IngestEmailAddress): number {
+  if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+  return left.email.localeCompare(right.email);
 }
 
 function normalizeEmail(email: string): string {

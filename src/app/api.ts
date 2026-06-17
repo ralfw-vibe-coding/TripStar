@@ -1,4 +1,4 @@
-import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Trip, User } from "../domain/model";
+import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, IngestEmailAddress, Trip, User } from "../domain/model";
 import type { CreateTripInput, UpdateDocumentInput, UpdateTripInput } from "../domain/providers/state-provider";
 
 const authTokenStorageKey = "tripstar.authToken";
@@ -110,6 +110,31 @@ export function updateProfile(input: { shortCode: string; name?: string | null; 
   return requestJson("/api/auth/profile", {
     method: "PATCH",
     body: JSON.stringify(input),
+  });
+}
+
+export function fetchIngestEmailAddresses(): Promise<IngestEmailAddress[]> {
+  return requestJson<IngestEmailAddress[]>("/api/auth/ingest-emails");
+}
+
+export function requestIngestEmailOtp(email: string): Promise<{ email: string; expiresAt: string; devOtp?: string }> {
+  return requestJson("/api/auth/request-ingest-email-otp", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function verifyIngestEmail(email: string, otp: string): Promise<{ emailAddress: IngestEmailAddress }> {
+  return requestJson("/api/auth/verify-ingest-email", {
+    method: "POST",
+    body: JSON.stringify({ email, otp }),
+  });
+}
+
+export function deleteIngestEmail(email: string): Promise<{ ok: true }> {
+  return requestJson("/api/auth/ingest-emails", {
+    method: "DELETE",
+    body: JSON.stringify({ email }),
   });
 }
 

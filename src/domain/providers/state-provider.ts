@@ -1,4 +1,4 @@
-import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Id, IngestPart, Trip, User } from "../model";
+import type { ActivityLogEntry, AnalysisJob, AuthSession, Booking, CalendarView, DocumentRecord, Id, IngestEmailAddress, IngestPart, Trip, User } from "../model";
 
 export interface CreateTripInput {
   tripNumber?: string;
@@ -113,6 +113,10 @@ export interface RequestOtpResult {
   devOtp?: string;
 }
 
+export interface VerifyIngestEmailResult {
+  emailAddress: IngestEmailAddress;
+}
+
 export interface VerifyOtpResult {
   user: User;
   session: AuthSession;
@@ -132,6 +136,10 @@ export interface TripStarStateProvider {
   updateUserProfile(userId: Id, input: UpdateUserProfileInput): Promise<User>;
   requestLoginOtp(email: string): Promise<RequestOtpResult>;
   verifyLoginOtp(email: string, otp: string): Promise<VerifyOtpResult>;
+  listIngestEmailAddresses(userId: Id): Promise<IngestEmailAddress[]>;
+  requestIngestEmailOtp(userId: Id, email: string): Promise<RequestOtpResult>;
+  verifyIngestEmailOtp(userId: Id, email: string, otp: string): Promise<VerifyIngestEmailResult>;
+  deleteSecondaryIngestEmail(userId: Id, email: string): Promise<void>;
   getAuthSession(token: string): Promise<VerifyOtpResult | null>;
   revokeAuthSession(token: string): Promise<void>;
 

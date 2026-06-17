@@ -31,8 +31,17 @@ export interface OtpChallenge {
   id: Id;
   email: string;
   otp: string;
+  purpose?: "login" | "ingest_email";
+  userId?: Id | null;
   expiresAt: string;
   consumedAt: string | null;
+  createdAt: string;
+}
+
+export interface IngestEmailAddress {
+  email: string;
+  userId: Id;
+  isPrimary: boolean;
   createdAt: string;
 }
 

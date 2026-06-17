@@ -66,6 +66,50 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
+      if (request.method === "GET" && segments.length === 2 && segments[1] === "ingest-emails") {
+        const user = await getCurrentUser(provider, bearerToken(request));
+        if (!user) {
+          return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        }
+        return jsonResponse(await provider.listIngestEmailAddresses(user.id));
+      }
+
+      if (request.method === "POST" && segments.length === 2 && segments[1] === "request-ingest-email-otp") {
+        const user = await getCurrentUser(provider, bearerToken(request));
+        if (!user) {
+          return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        }
+        const body = await readJson<{ email: string }>(request);
+        const result = await provider.requestIngestEmailOtp(user.id, body.email);
+        if (process.env.TRIPSTAR_AUTH_MODE === "email") {
+          if (!result.devOtp) {
+            throw new Error("OTP generation failed.");
+          }
+          await sendOtpEmail({ to: result.email, otp: result.devOtp, expiresAt: result.expiresAt });
+          return jsonResponse({ email: result.email, expiresAt: result.expiresAt });
+        }
+        return jsonResponse(result);
+      }
+
+      if (request.method === "POST" && segments.length === 2 && segments[1] === "verify-ingest-email") {
+        const user = await getCurrentUser(provider, bearerToken(request));
+        if (!user) {
+          return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        }
+        const body = await readJson<{ email: string; otp: string }>(request);
+        return jsonResponse(await provider.verifyIngestEmailOtp(user.id, body.email, body.otp));
+      }
+
+      if (request.method === "DELETE" && segments.length === 2 && segments[1] === "ingest-emails") {
+        const user = await getCurrentUser(provider, bearerToken(request));
+        if (!user) {
+          return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        }
+        const body = await readJson<{ email: string }>(request);
+        await provider.deleteSecondaryIngestEmail(user.id, body.email);
+        return jsonResponse({ ok: true });
+      }
+
       if (request.method === "POST" && segments.length === 2 && segments[1] === "logout") {
         if (token) {
           await provider.revokeAuthSession(token);
