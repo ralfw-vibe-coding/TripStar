@@ -24,7 +24,7 @@ export async function receiveIngestPart(
   const sender = part.sender.trim().toLowerCase();
 
   // Look up the user first so every log entry can carry the correct userId via AsyncLocalStorage.
-  const user = await state.findUserByEmail(sender);
+  const user = await state.findUserByIngestEmail(sender);
   const userId = user?.id ?? null;
 
   return withUserId(userId, async () => {

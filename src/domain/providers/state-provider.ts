@@ -169,6 +169,7 @@ export interface TripStarStateProvider {
   getCalendarView(userId: string, now?: Date): Promise<CalendarView>;
 
   findUserByEmail(email: string): Promise<User | null>;
+  findUserByIngestEmail(email: string): Promise<User | null>;
   findDocumentByEmailMessageId(messageId: string): Promise<DocumentRecord | null>;
   storeIngestPart(part: IngestPart): Promise<void>;
   getIngestParts(txId: string): Promise<IngestPart[]>;

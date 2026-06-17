@@ -99,6 +99,7 @@ export class LocalStateProvider implements TripStarStateProvider {
     this.now = options.now ?? (() => new Date());
     this.stateFilePath = options.stateFilePath ?? null;
     this.initialTripNumber = options.initialTripNumber ?? 200;
+    this.ensurePrimaryIngestEmails();
   }
 
   async listUsers(): Promise<User[]> {
@@ -598,6 +599,13 @@ export class LocalStateProvider implements TripStarStateProvider {
     return this.users.find((u) => u.email === email.trim().toLowerCase()) ?? null;
   }
 
+  async findUserByIngestEmail(emailInput: string): Promise<User | null> {
+    const email = normalizeEmail(emailInput);
+    const address = this.ingestEmailAddresses.find((candidate) => candidate.email === email);
+    if (!address) return null;
+    return clone(this.users.find((candidate) => candidate.id === address.userId) ?? null);
+  }
+
   async findDocumentByEmailMessageId(messageId: string): Promise<DocumentRecord | null> {
     return this.documents.find((d) => d.sourceEmailIngestId === messageId && d.deletedAt === null) ?? null;
   }
@@ -844,6 +852,12 @@ export class LocalStateProvider implements TripStarStateProvider {
       isPrimary: true,
       createdAt: user.createdAt,
     });
+  }
+
+  private ensurePrimaryIngestEmails(): void {
+    for (const user of this.users) {
+      this.ensurePrimaryIngestEmail(user);
+    }
   }
 
   private assertIngestEmailCanBeAdded(userId: Id, email: string): void {

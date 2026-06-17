@@ -626,6 +626,19 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return (rows[0]?.data as User | undefined) ?? null;
   }
 
+  async findUserByIngestEmail(emailInput: string): Promise<User | null> {
+    await this.ready;
+    const email = normalizeEmail(emailInput);
+    const rows = await this.sql`
+      select users.data
+      from ingest_email_addresses
+      join users on users.id = ingest_email_addresses.user_id
+      where ingest_email_addresses.email = ${email}
+      limit 1
+    `;
+    return (rows[0]?.data as User | undefined) ?? null;
+  }
+
   async findDocumentByEmailMessageId(messageId: string): Promise<DocumentRecord | null> {
     await this.ready;
     const rows = await this.sql`
