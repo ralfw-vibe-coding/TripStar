@@ -843,6 +843,7 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
   const [ingestEmailDevOtp, setIngestEmailDevOtp] = useState<string | null>(null);
   const [ingestEmailMessage, setIngestEmailMessage] = useState<string | null>(null);
   const [isIngestEmailBusy, setIsIngestEmailBusy] = useState(false);
+  const [profileTab, setProfileTab] = useState<"signatures" | "emails">("signatures");
 
   useEffect(() => {
     setIsLoadingIngestEmails(true);
@@ -975,150 +976,175 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
           <input value={jobPosition} onChange={(event) => setJobPosition(event.target.value)} required />
         </label>
 
-        <div className="field-label">
-          Employee signature *
-          <div className="signature-field">
-            {signatureEmployee
-              ? <img src={signatureEmployee} className="signature-preview" alt="Employee signature" />
-              : <span className="signature-empty">No signature uploaded</span>}
-            <div className="signature-actions">
-              <label className="secondary-button signature-upload-btn">
-                {signatureEmployee ? "Replace" : "Upload image"}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
-                  onChange={(e) => handleSignatureUpload(e, setSignatureEmployee)} />
-              </label>
-              {signatureEmployee && (
-                <button type="button" className="secondary-button" onClick={() => setSignatureEmployee(null)}>Remove</button>
-              )}
-            </div>
-          </div>
+        <div className="profile-tabs" role="tablist" aria-label="Profile sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={profileTab === "signatures"}
+            className={profileTab === "signatures" ? "active" : ""}
+            onClick={() => setProfileTab("signatures")}
+          >
+            Signatures
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={profileTab === "emails"}
+            className={profileTab === "emails" ? "active" : ""}
+            onClick={() => setProfileTab("emails")}
+          >
+            Email addresses
+          </button>
         </div>
 
-        <div className="field-label">
-          Manager signature *
-          <div className="signature-field">
-            {signatureManager
-              ? <img src={signatureManager} className="signature-preview" alt="Manager signature" />
-              : <span className="signature-empty">No signature uploaded</span>}
-            <div className="signature-actions">
-              <label className="secondary-button signature-upload-btn">
-                {signatureManager ? "Replace" : "Upload image"}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
-                  onChange={(e) => handleSignatureUpload(e, setSignatureManager)} />
-              </label>
-              {signatureManager && (
-                <button type="button" className="secondary-button" onClick={() => setSignatureManager(null)}>Remove</button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <section className="profile-section">
-          <div>
-            <h3>Email ingest addresses</h3>
-            <p className="muted-small">Forwarded booking emails are accepted from these addresses after verification.</p>
-          </div>
-
-          <div className="ingest-email-list">
-            {isLoadingIngestEmails ? (
-              <p className="muted-small">Loading email addresses...</p>
-            ) : (
-              ingestEmails.map((address) => (
-                <div className="ingest-email-row" key={address.email}>
-                  <span>{address.email}</span>
-                  <strong>{address.isPrimary ? "prim." : "2nd"}</strong>
-                  {!address.isPrimary && (
-                    <button
-                      type="button"
-                      className="icon-command"
-                      disabled={isIngestEmailBusy}
-                      onClick={() => handleDeleteIngestEmail(address.email)}
-                      aria-label={`Delete ${address.email}`}
-                      title="Delete"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+        {profileTab === "signatures" ? (
+          <section className="profile-tab-panel" role="tabpanel">
+            <div className="field-label">
+              Employee signature *
+              <div className="signature-field">
+                {signatureEmployee
+                  ? <img src={signatureEmployee} className="signature-preview" alt="Employee signature" />
+                  : <span className="signature-empty">No signature uploaded</span>}
+                <div className="signature-actions">
+                  <label className="secondary-button signature-upload-btn">
+                    {signatureEmployee ? "Replace" : "Upload image"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
+                      onChange={(e) => handleSignatureUpload(e, setSignatureEmployee)} />
+                  </label>
+                  {signatureEmployee && (
+                    <button type="button" className="secondary-button" onClick={() => setSignatureEmployee(null)}>Remove</button>
                   )}
                 </div>
-              ))
-            )}
-          </div>
+              </div>
+            </div>
 
-          {!pendingIngestEmail ? (
-            <div className="ingest-email-add">
-              <label className="field-label">
-                Add secondary address
-                <input
-                  type="email"
-                  value={newIngestEmail}
-                  onChange={(event) => setNewIngestEmail(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      if (!isIngestEmailBusy && newIngestEmail.trim().length > 0) void handleRequestIngestEmailOtp();
-                    }
-                  }}
-                  disabled={isIngestEmailBusy}
-                  placeholder="name@example.com"
-                />
-              </label>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isIngestEmailBusy || newIngestEmail.trim().length === 0}
-                onClick={handleRequestIngestEmailOtp}
-              >
-                Send code
-              </button>
+            <div className="field-label">
+              Manager signature *
+              <div className="signature-field">
+                {signatureManager
+                  ? <img src={signatureManager} className="signature-preview" alt="Manager signature" />
+                  : <span className="signature-empty">No signature uploaded</span>}
+                <div className="signature-actions">
+                  <label className="secondary-button signature-upload-btn">
+                    {signatureManager ? "Replace" : "Upload image"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
+                      onChange={(e) => handleSignatureUpload(e, setSignatureManager)} />
+                  </label>
+                  {signatureManager && (
+                    <button type="button" className="secondary-button" onClick={() => setSignatureManager(null)}>Remove</button>
+                  )}
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="ingest-email-add">
-              <label className="field-label">
-                Verification code for {pendingIngestEmail}
-                <input
-                  type="text"
-                  inputMode="text"
-                  value={ingestEmailOtp}
-                  onChange={(event) => setIngestEmailOtp(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      if (!isIngestEmailBusy && ingestEmailOtp.trim().length > 0) void handleVerifyIngestEmail();
-                    }
-                  }}
-                  disabled={isIngestEmailBusy}
-                  autoComplete="one-time-code"
-                />
-              </label>
-              <button
-                type="button"
-                className="icon-command"
-                disabled={isIngestEmailBusy || ingestEmailOtp.trim().length === 0}
-                onClick={handleVerifyIngestEmail}
-                aria-label="Verify email address"
-                title="Verify"
-              >
-                <Check size={14} />
-              </button>
-              <button
-                type="button"
-                className="icon-command"
-                disabled={isIngestEmailBusy}
-                onClick={() => {
-                  setPendingIngestEmail(null);
-                  setIngestEmailOtp("");
-                  setIngestEmailDevOtp(null);
-                }}
-                aria-label="Cancel email verification"
-                title="Cancel"
-              >
-                <X size={14} />
-              </button>
+          </section>
+        ) : (
+          <section className="profile-section profile-tab-panel" role="tabpanel">
+            <div>
+              <h3>Email ingest addresses</h3>
+              <p className="muted-small">Forwarded booking emails are accepted from these addresses after verification.</p>
             </div>
-          )}
-          {ingestEmailDevOtp && <div className="dev-otp">Local code: {ingestEmailDevOtp}</div>}
-          {ingestEmailMessage && <p className="muted-small">{ingestEmailMessage}</p>}
-        </section>
+
+            <div className="ingest-email-list">
+              {isLoadingIngestEmails ? (
+                <p className="muted-small">Loading email addresses...</p>
+              ) : (
+                ingestEmails.map((address) => (
+                  <div className="ingest-email-row" key={address.email}>
+                    <span>{address.email}</span>
+                    <strong>{address.isPrimary ? "prim." : "2nd"}</strong>
+                    {!address.isPrimary && (
+                      <button
+                        type="button"
+                        className="icon-command"
+                        disabled={isIngestEmailBusy}
+                        onClick={() => handleDeleteIngestEmail(address.email)}
+                        aria-label={`Delete ${address.email}`}
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {!pendingIngestEmail ? (
+              <div className="ingest-email-add">
+                <label className="field-label">
+                  Add secondary address
+                  <input
+                    type="email"
+                    value={newIngestEmail}
+                    onChange={(event) => setNewIngestEmail(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        if (!isIngestEmailBusy && newIngestEmail.trim().length > 0) void handleRequestIngestEmailOtp();
+                      }
+                    }}
+                    disabled={isIngestEmailBusy}
+                    placeholder="name@example.com"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={isIngestEmailBusy || newIngestEmail.trim().length === 0}
+                  onClick={handleRequestIngestEmailOtp}
+                >
+                  Send code
+                </button>
+              </div>
+            ) : (
+              <div className="ingest-email-add">
+                <label className="field-label">
+                  Verification code for {pendingIngestEmail}
+                  <input
+                    type="text"
+                    inputMode="text"
+                    value={ingestEmailOtp}
+                    onChange={(event) => setIngestEmailOtp(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        if (!isIngestEmailBusy && ingestEmailOtp.trim().length > 0) void handleVerifyIngestEmail();
+                      }
+                    }}
+                    disabled={isIngestEmailBusy}
+                    autoComplete="one-time-code"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="icon-command"
+                  disabled={isIngestEmailBusy || ingestEmailOtp.trim().length === 0}
+                  onClick={handleVerifyIngestEmail}
+                  aria-label="Verify email address"
+                  title="Verify"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-command"
+                  disabled={isIngestEmailBusy}
+                  onClick={() => {
+                    setPendingIngestEmail(null);
+                    setIngestEmailOtp("");
+                    setIngestEmailDevOtp(null);
+                  }}
+                  aria-label="Cancel email verification"
+                  title="Cancel"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+            {ingestEmailDevOtp && <div className="dev-otp">Local code: {ingestEmailDevOtp}</div>}
+            {ingestEmailMessage && <p className="muted-small">{ingestEmailMessage}</p>}
+          </section>
+        )}
 
         {error && <div className="notice">{error}</div>}
 

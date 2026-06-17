@@ -1062,6 +1062,35 @@ textarea:disabled {
 
 .profile-dialog {
   width: min(100%, 420px);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.profile-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid #d9e0e5;
+}
+
+.profile-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #667085;
+  font-weight: 700;
+}
+
+.profile-tabs button.active {
+  border-bottom-color: #174ea6;
+  color: #174ea6;
+}
+
+.profile-tab-panel {
+  display: grid;
+  gap: 16px;
 }
 
 .signature-field {
