@@ -310,6 +310,17 @@ export class PostgresStateProvider implements TripStarStateProvider {
     return rows.map((row) => row.data as Trip);
   }
 
+  async listArchivedTrips(ownerUserId: Id): Promise<Trip[]> {
+    await this.ready;
+    const rows = await this.sql`
+      select data
+      from trips
+      where owner_user_id = ${ownerUserId} and archived_at is not null
+      order by start_date desc nulls last, trip_number desc
+    `;
+    return rows.map((row) => row.data as Trip);
+  }
+
   async createTrip(input: CreateTripInput): Promise<Trip> {
     await this.ready;
     const timestamp = this.nowIso();
@@ -375,6 +386,47 @@ export class PostgresStateProvider implements TripStarStateProvider {
       level: "info",
       scope: "trip",
       message: `Updated trip ${updated.title}`,
+      documentName: null,
+      details: { tripId: id },
+    });
+    return clone(updated);
+  }
+
+  async archiveTrip(id: Id, ownerUserId: Id): Promise<Trip> {
+    await this.ready;
+    const trip = await this.requireOwnedTrip(id, ownerUserId, false);
+    const archivedAt = this.nowIso();
+    const updated: Trip = { ...trip, archivedAt, updatedAt: archivedAt };
+    await this.sql`
+      update trips
+      set archived_at = ${updated.archivedAt},
+          data = ${toJson(updated)}
+      where id = ${id}
+    `;
+    await this.appendActivity({
+      level: "info",
+      scope: "trip",
+      message: `Archived trip ${updated.title}`,
+      documentName: null,
+      details: { tripId: id },
+    });
+    return clone(updated);
+  }
+
+  async unarchiveTrip(id: Id, ownerUserId: Id): Promise<Trip> {
+    await this.ready;
+    const trip = await this.requireOwnedTrip(id, ownerUserId, true);
+    const updated: Trip = { ...trip, archivedAt: null, updatedAt: this.nowIso() };
+    await this.sql`
+      update trips
+      set archived_at = null,
+          data = ${toJson(updated)}
+      where id = ${id}
+    `;
+    await this.appendActivity({
+      level: "info",
+      scope: "trip",
+      message: `Restored trip ${updated.title}`,
       documentName: null,
       details: { tripId: id },
     });
@@ -812,6 +864,15 @@ export class PostgresStateProvider implements TripStarStateProvider {
 
   private async requireTrip(id: Id): Promise<Trip> {
     const rows = await this.sql`select data from trips where id = ${id} and archived_at is null limit 1`;
+    const trip = rows[0]?.data as Trip | undefined;
+    if (!trip) throw new Error(`Trip not found: ${id}`);
+    return trip;
+  }
+
+  private async requireOwnedTrip(id: Id, ownerUserId: Id, archived: boolean): Promise<Trip> {
+    const rows = archived
+      ? await this.sql`select data from trips where id = ${id} and owner_user_id = ${ownerUserId} and archived_at is not null limit 1`
+      : await this.sql`select data from trips where id = ${id} and owner_user_id = ${ownerUserId} and archived_at is null limit 1`;
     const trip = rows[0]?.data as Trip | undefined;
     if (!trip) throw new Error(`Trip not found: ${id}`);
     return trip;

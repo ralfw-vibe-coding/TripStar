@@ -5,6 +5,10 @@ export async function listTrips(provider: TripStarStateProvider): Promise<Trip[]
   return provider.listTrips();
 }
 
+export async function listArchivedTrips(provider: TripStarStateProvider, ownerUserId: Id): Promise<Trip[]> {
+  return provider.listArchivedTrips(ownerUserId);
+}
+
 export async function createTrip(provider: TripStarStateProvider, input: CreateTripInput): Promise<Trip> {
   validateTripDates(input.startDate, input.endDate);
   return provider.createTrip(input);
@@ -19,6 +23,14 @@ export async function updateTrip(
     validateTripDates(input.startDate, input.endDate);
   }
   return provider.updateTrip(id, input);
+}
+
+export async function archiveTrip(provider: TripStarStateProvider, id: Id, ownerUserId: Id): Promise<Trip> {
+  return provider.archiveTrip(id, ownerUserId);
+}
+
+export async function unarchiveTrip(provider: TripStarStateProvider, id: Id, ownerUserId: Id): Promise<Trip> {
+  return provider.unarchiveTrip(id, ownerUserId);
 }
 
 function validateTripDates(startDate: string, endDate: string): void {

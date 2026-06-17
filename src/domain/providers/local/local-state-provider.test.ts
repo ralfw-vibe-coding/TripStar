@@ -413,6 +413,19 @@ describe("LocalStateProvider", () => {
     expect(calendar.bookings).toMatchObject([{ id: "past", tripId: "trip_sfo" }]);
   });
 
+  it("hides bookings from archived trips in the calendar view", async () => {
+    const provider = new LocalStateProvider({
+      now: () => fixedNow,
+      trips: [testTrip({ archivedAt: fixedIso })],
+      bookings: [testBooking({ tripId: "trip_sfo", participantUserIds: ["user_ralf"] })],
+    });
+
+    const calendar = await provider.getCalendarView("user_ralf", fixedNow);
+
+    expect(calendar.trips).toHaveLength(0);
+    expect(calendar.bookings).toHaveLength(0);
+  });
+
   it("updates trips, bookings, and document assignments", async () => {
     const provider = new LocalStateProvider({
       now: () => fixedNow,

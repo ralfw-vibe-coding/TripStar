@@ -317,6 +317,14 @@ export class LocalStateProvider implements TripStarStateProvider {
     );
   }
 
+  async listArchivedTrips(ownerUserId: Id): Promise<Trip[]> {
+    return clone(
+      this.trips
+        .filter((trip) => trip.ownerUserId === ownerUserId && trip.archivedAt !== null)
+        .sort((left, right) => right.startDate.localeCompare(left.startDate) || right.tripNumber.localeCompare(left.tripNumber)),
+    );
+  }
+
   async createTrip(input: CreateTripInput): Promise<Trip> {
     const timestamp = isoDate(this.now());
     const tripNumber = input.tripNumber ?? this.nextTripNumber();
@@ -368,6 +376,36 @@ export class LocalStateProvider implements TripStarStateProvider {
       level: "info",
       scope: "trip",
       message: `Updated trip ${trip.title}`,
+      documentName: null,
+      details: { tripId: id },
+    });
+    this.persist();
+    return clone(trip);
+  }
+
+  async archiveTrip(id: Id, ownerUserId: Id): Promise<Trip> {
+    const trip = this.requireOwnedTrip(id, ownerUserId, false);
+    trip.archivedAt = isoDate(this.now());
+    trip.updatedAt = trip.archivedAt;
+    await this.appendActivity({
+      level: "info",
+      scope: "trip",
+      message: `Archived trip ${trip.title}`,
+      documentName: null,
+      details: { tripId: id },
+    });
+    this.persist();
+    return clone(trip);
+  }
+
+  async unarchiveTrip(id: Id, ownerUserId: Id): Promise<Trip> {
+    const trip = this.requireOwnedTrip(id, ownerUserId, true);
+    trip.archivedAt = null;
+    trip.updatedAt = isoDate(this.now());
+    await this.appendActivity({
+      level: "info",
+      scope: "trip",
+      message: `Restored trip ${trip.title}`,
       documentName: null,
       details: { tripId: id },
     });
@@ -679,6 +717,16 @@ export class LocalStateProvider implements TripStarStateProvider {
 
   private requireTrip(id: Id): Trip {
     const trip = this.trips.find((candidate) => candidate.id === id && candidate.archivedAt === null);
+    if (!trip) {
+      throw new Error(`Trip not found: ${id}`);
+    }
+    return trip;
+  }
+
+  private requireOwnedTrip(id: Id, ownerUserId: Id, archived: boolean): Trip {
+    const trip = this.trips.find((candidate) =>
+      candidate.id === id && candidate.ownerUserId === ownerUserId && (archived ? candidate.archivedAt !== null : candidate.archivedAt === null),
+    );
     if (!trip) {
       throw new Error(`Trip not found: ${id}`);
     }

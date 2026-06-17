@@ -60,6 +60,18 @@ export function updateTrip(tripId: string, input: UpdateTripInput): Promise<Trip
   });
 }
 
+export function fetchArchivedTrips(): Promise<Trip[]> {
+  return requestJson<Trip[]>("/api/trips/archive");
+}
+
+export function archiveTrip(tripId: string): Promise<Trip> {
+  return requestJson<Trip>(`/api/trips/${tripId}/archive`, { method: "POST", body: JSON.stringify({}) });
+}
+
+export function unarchiveTrip(tripId: string): Promise<Trip> {
+  return requestJson<Trip>(`/api/trips/${tripId}/unarchive`, { method: "POST", body: JSON.stringify({}) });
+}
+
 export function assignBookingTrip(bookingId: string, tripId: string | null): Promise<Booking> {
   return requestJson<Booking>(`/api/bookings/${bookingId}/trip`, {
     method: "PATCH",

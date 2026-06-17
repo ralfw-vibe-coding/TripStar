@@ -144,8 +144,11 @@ export interface TripStarStateProvider {
   revokeAuthSession(token: string): Promise<void>;
 
   listTrips(): Promise<Trip[]>;
+  listArchivedTrips(ownerUserId: Id): Promise<Trip[]>;
   createTrip(input: CreateTripInput): Promise<Trip>;
   updateTrip(id: Id, input: UpdateTripInput): Promise<Trip>;
+  archiveTrip(id: Id, ownerUserId: Id): Promise<Trip>;
+  unarchiveTrip(id: Id, ownerUserId: Id): Promise<Trip>;
 
   listBookings(): Promise<Booking[]>;
   createBookings(input: CreateBookingInput[]): Promise<Booking[]>;

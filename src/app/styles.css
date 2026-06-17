@@ -1050,6 +1050,7 @@ textarea:disabled {
 
 .trip-dialog,
 .profile-dialog,
+.archive-dialog,
 .document-dialog {
   width: min(100%, 560px);
   display: grid;
@@ -1064,6 +1065,10 @@ textarea:disabled {
   width: min(100%, 420px);
   max-height: calc(100vh - 40px);
   overflow-y: auto;
+}
+
+.archive-dialog {
+  width: min(100%, 440px);
 }
 
 .profile-tabs {
@@ -1441,6 +1446,17 @@ textarea:disabled {
   justify-content: flex-end;
 }
 
+.trip-dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trip-dialog-actions > div {
+  display: flex;
+  gap: 8px;
+}
+
 .secondary-button,
 .primary-button {
   padding: 0 14px;
@@ -1450,6 +1466,12 @@ textarea:disabled {
   color: #ffffff;
   background: #174ea6;
   border-color: #174ea6;
+}
+
+.danger-button {
+  color: #9f1239;
+  border-color: #fecdd3;
+  background: #fff1f2;
 }
 
 .report-list {

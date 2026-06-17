@@ -1,4 +1,6 @@
 import {
+  Archive,
+  ArchiveRestore,
   CalendarDays,
   Bus,
   Car,
@@ -41,6 +43,7 @@ import type { IngestEmailAddress } from "../domain/model";
 import { DAILY_ALLOWANCES, type CountryAllowance } from "./daily-allowances-data";
 import {
   assignBookingTrip,
+  archiveTrip as archiveTripApi,
   clearAuthToken,
   createTrip,
   deleteBooking,
@@ -48,6 +51,7 @@ import {
   deleteIngestEmail,
   fetchAnalysisJobs,
   fetchActivityLog,
+  fetchArchivedTrips,
   fetchCalendar,
   fetchCurrentUser,
   fetchDocumentOriginal,
@@ -67,6 +71,7 @@ import {
   generateTripReport as generateTripReportApi,
   updateProfile,
   updateTrip,
+  unarchiveTrip as unarchiveTripApi,
   verifyOtp,
   verifyIngestEmail,
 } from "./api";
@@ -101,6 +106,7 @@ export function App() {
   const [isTripDialogOpen, setIsTripDialogOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -247,6 +253,31 @@ export function App() {
       setIsTripDialogOpen(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Trip could not be saved.");
+    } finally {
+      setIsCreatingTrip(false);
+    }
+  }
+
+  async function handleTripArchive(trip: Trip) {
+    if (!view || !currentUser || trip.ownerUserId !== currentUser.id) return;
+
+    setIsCreatingTrip(true);
+    setError(null);
+    try {
+      await archiveTripApi(trip.id);
+      setView({
+        ...view,
+        trips: view.trips.filter((candidate) => candidate.id !== trip.id),
+        bookings: view.bookings.filter((booking) => booking.tripId !== trip.id),
+      });
+      setEditingTrip(null);
+      setIsTripDialogOpen(false);
+      setExpandedBookingId((id) => {
+        if (!id) return id;
+        return view.bookings.some((booking) => booking.id === id && booking.tripId === trip.id) ? null : id;
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Trip could not be archived.");
     } finally {
       setIsCreatingTrip(false);
     }
@@ -560,6 +591,16 @@ export function App() {
                 <ScrollText size={16} />
                 Activity log
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsArchiveDialogOpen(true);
+                  setIsProfileMenuOpen(false);
+                }}
+              >
+                <ArchiveRestore size={16} />
+                Archive
+              </button>
               <button type="button" onClick={handleLogout}>
                 <LogOut size={16} />
                 Logout
@@ -657,6 +698,7 @@ export function App() {
             setIsTripDialogOpen(false);
           }}
           onSubmit={editingTrip ? handleTripUpdate : handleTripCreate}
+          onArchive={editingTrip ? handleTripArchive : undefined}
           isSubmitting={isCreatingTrip}
         />
       )}
@@ -667,6 +709,16 @@ export function App() {
 
       {isActivityLogOpen && (
         <ActivityLogDialog analysisJobs={analysisJobs} onClose={() => setIsActivityLogOpen(false)} />
+      )}
+
+      {isArchiveDialogOpen && currentUser && (
+        <ArchiveDialog
+          onClose={() => setIsArchiveDialogOpen(false)}
+          onRestored={async () => {
+            setIsArchiveDialogOpen(false);
+            await reloadWorkspace();
+          }}
+        />
       )}
 
       {isDocumentDialogOpen && view && (
@@ -1159,6 +1211,94 @@ function ProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => v
           </button>
         </footer>
       </form>
+    </div>
+  );
+}
+
+function ArchiveDialog({ onClose, onRestored }: { onClose: () => void; onRestored: () => Promise<void> }) {
+  const [archivedTrips, setArchivedTrips] = useState<Trip[]>([]);
+  const [selectedTripId, setSelectedTripId] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+    void fetchArchivedTrips()
+      .then((trips) => {
+        if (!isMounted) return;
+        setArchivedTrips(trips);
+        setSelectedTripId(trips[0]?.id ?? "");
+      })
+      .catch((caught) => {
+        if (isMounted) setError(caught instanceof Error ? caught.message : "Archived trips could not be loaded.");
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleRestore() {
+    if (!selectedTripId) return;
+    setError(null);
+    setIsRestoring(true);
+    try {
+      await unarchiveTripApi(selectedTripId);
+      await onRestored();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Trip could not be restored.");
+    } finally {
+      setIsRestoring(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="archive-dialog" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+        <header className="dialog-header">
+          <div>
+            <h2 id="archive-title">Archive</h2>
+            <p>Restore one of your archived trips.</p>
+          </div>
+          <button className="icon-command" type="button" aria-label="Close" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </header>
+
+        {isLoading ? (
+          <p className="muted-small">Loading archived trips...</p>
+        ) : archivedTrips.length === 0 ? (
+          <p className="muted-small">No archived trips.</p>
+        ) : (
+          <label className="field-label">
+            Trip
+            <select value={selectedTripId} onChange={(event) => setSelectedTripId(event.target.value)}>
+              {archivedTrips.map((trip) => (
+                <option key={trip.id} value={trip.id}>
+                  {trip.title} #{trip.tripNumber}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {error && <div className="notice">{error}</div>}
+
+        <footer className="dialog-actions">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            <X size={16} />
+            Cancel
+          </button>
+          <button type="button" className="primary-button" disabled={isLoading || isRestoring || !selectedTripId} onClick={handleRestore}>
+            <ArchiveRestore size={16} />
+            {isRestoring ? "Restoring" : "Restore"}
+          </button>
+        </footer>
+      </section>
     </div>
   );
 }
@@ -2430,6 +2570,7 @@ function TripDialog({
   trip,
   onClose,
   onSubmit,
+  onArchive,
   isSubmitting,
 }: {
   users: User[];
@@ -2438,9 +2579,11 @@ function TripDialog({
   trip: Trip | null;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onArchive?: (trip: Trip) => void;
   isSubmitting: boolean;
 }) {
   const isEditing = trip !== null;
+  const canArchive = isEditing && trip.ownerUserId === currentUserId && onArchive !== undefined;
   const suggestedTripNumber = useMemo(() => {
     const nums = allTrips
       .map((t) => Number.parseInt(t.tripNumber, 10))
@@ -2525,15 +2668,25 @@ function TripDialog({
             ))}
         </fieldset>
 
-        <footer className="dialog-actions">
-          <button type="button" className="secondary-button" onClick={onClose}>
-            <X size={16} />
-            Cancel
-          </button>
-          <button type="submit" className="primary-button" disabled={isSubmitting}>
-            <Check size={16} />
-            {isSubmitting ? "Saving" : isEditing ? "Save" : "Create"}
-          </button>
+        <footer className="trip-dialog-actions">
+          <div>
+            {canArchive && (
+              <button type="button" className="secondary-button danger-button" disabled={isSubmitting} onClick={() => onArchive(trip)}>
+                <Archive size={16} />
+                Archive
+              </button>
+            )}
+          </div>
+          <div className="dialog-actions">
+            <button type="button" className="secondary-button" onClick={onClose}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" className="primary-button" disabled={isSubmitting}>
+              <Check size={16} />
+              {isSubmitting ? "Saving" : isEditing ? "Save" : "Create"}
+            </button>
+          </div>
         </footer>
       </form>
     </div>

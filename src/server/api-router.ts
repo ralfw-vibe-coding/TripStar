@@ -2,7 +2,7 @@ import { assignBookingToTrip, deleteBooking, updateBooking } from "../domain/rpu
 import { getCurrentUser, requestLoginOtp, verifyLoginOtp } from "../domain/rpus/auth";
 import { getCalendar } from "../domain/rpus/calendar";
 import { deleteDirectDocument, listDocumentsForUser, uploadDocument, type UploadDocumentInput } from "../domain/rpus/documents";
-import { createTrip, listTrips, updateTrip } from "../domain/rpus/trips";
+import { archiveTrip, createTrip, listArchivedTrips, listTrips, unarchiveTrip, updateTrip } from "../domain/rpus/trips";
 import { getStateProvider } from "../domain/provider-factory";
 import type { CreateTripInput, UpdateBookingInput, UpdateDocumentInput, UpdateTripInput } from "../domain/providers/state-provider";
 
@@ -130,12 +130,27 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         return jsonResponse(await listTrips(provider));
       }
 
+      if (request.method === "GET" && segments.length === 2 && segments[1] === "archive") {
+        if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        return jsonResponse(await listArchivedTrips(provider, currentUserId));
+      }
+
       if (request.method === "POST" && segments.length === 1) {
         return jsonResponse(await createTrip(provider, await readJson<CreateTripInput>(request)), { status: 201 });
       }
 
       if (request.method === "PATCH" && segments.length === 2) {
         return jsonResponse(await updateTrip(provider, segments[1], await readJson<UpdateTripInput>(request)));
+      }
+
+      if (request.method === "POST" && segments.length === 3 && segments[2] === "archive") {
+        if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        return jsonResponse(await archiveTrip(provider, segments[1], currentUserId));
+      }
+
+      if (request.method === "POST" && segments.length === 3 && segments[2] === "unarchive") {
+        if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        return jsonResponse(await unarchiveTrip(provider, segments[1], currentUserId));
       }
 
       if (request.method === "POST" && segments.length === 3 && segments[2] === "report") {

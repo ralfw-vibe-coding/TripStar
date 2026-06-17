@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LocalStateProvider } from "../providers/local/local-state-provider";
-import { createTrip, listTrips, updateTrip } from "./trips";
+import { archiveTrip, createTrip, listArchivedTrips, listTrips, unarchiveTrip, updateTrip } from "./trips";
 import type { Trip } from "../model";
 
 const now = "2026-05-26T09:00:00.000Z";
@@ -56,5 +56,21 @@ describe("trip RPUs", () => {
         endDate: "2026-08-09",
       }),
     ).rejects.toThrow("end date");
+  });
+
+  it("archives and restores only trips owned by the user", async () => {
+    const provider = new LocalStateProvider({ now: () => new Date(now), trips: [trip] });
+
+    const archived = await archiveTrip(provider, "trip_200", "user_ralf");
+
+    expect(archived.archivedAt).toBe(now);
+    await expect(listTrips(provider)).resolves.toHaveLength(0);
+    await expect(listArchivedTrips(provider, "user_ralf")).resolves.toMatchObject([{ id: "trip_200" }]);
+    await expect(unarchiveTrip(provider, "trip_200", "other_user")).rejects.toThrow("Trip not found");
+
+    const restored = await unarchiveTrip(provider, "trip_200", "user_ralf");
+
+    expect(restored.archivedAt).toBeNull();
+    await expect(listTrips(provider)).resolves.toHaveLength(1);
   });
 });
