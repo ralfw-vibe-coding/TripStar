@@ -153,12 +153,9 @@ button {
 .brand-mark {
   width: 42px;
   height: 42px;
-  display: grid;
-  place-items: center;
-  background: #151922;
-  color: #ffffff;
+  flex-shrink: 0;
+  object-fit: contain;
   border-radius: 8px;
-  font-weight: 800;
 }
 
 .brand h1,

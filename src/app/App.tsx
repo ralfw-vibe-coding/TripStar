@@ -541,10 +541,10 @@ export function App() {
       <aside className="sidebar">
         <div className="sidebar-top">
           <div className="brand">
-            <span className="brand-mark">T*</span>
+            <img className="brand-mark" src="/favicon-192.png" alt="TripStar" />
             <div className="brand-text">
               <h1>TripStar</h1>
-              <p>TripCal + TripRep</p>
+              <p>Collect your bookings and expenses</p>
             </div>
           </div>
           <button
@@ -781,10 +781,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
     <main className="auth-shell">
       <section className="auth-panel">
         <div className="brand">
-          <span className="brand-mark">T*</span>
+          <img className="brand-mark" src="/favicon-192.png" alt="TripStar" />
           <div>
             <h1>TripStar</h1>
-            <p>TripCal + TripRep</p>
+            <p>Collect your bookings and expenses</p>
           </div>
         </div>
 
