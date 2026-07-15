@@ -57,13 +57,14 @@ export async function sendOtpEmail(input: OtpEmailInput): Promise<void> {
   }
 }
 
-export async function sendReportReadyEmail(input: ReportReadyEmailInput): Promise<void> {
+export async function sendReportReadyEmail(input: ReportReadyEmailInput): Promise<"sent" | "skipped"> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.AUTH_FROM_EMAIL;
-  if (!apiKey || !from) return;
+  if (!apiKey || !from) return "skipped";
 
-  await fetch("https://api.resend.com/emails", {
+  const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: AbortSignal.timeout(30_000),
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({
       from,
@@ -91,6 +92,12 @@ export async function sendReportReadyEmail(input: ReportReadyEmailInput): Promis
       `.trim(),
     }),
   });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Could not send report email: ${response.status} ${body}`);
+  }
+  return "sent";
 }
 
 export async function sendIngestErrorEmail(input: IngestErrorEmailInput): Promise<void> {

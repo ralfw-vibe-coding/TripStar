@@ -403,10 +403,13 @@ async function triggerReportGeneration(
       });
     }
   } else {
-    // Local dev: run inline after returning response
+    // Local dev: run inline after returning response. Failures are logged to
+    // the activity log by generateTripReport itself.
     const storage = createDocumentStorageProvider();
     setTimeout(() => {
-      void generateTripReport(state, storage, { tripId, userId, siteUrl });
+      generateTripReport(state, storage, { tripId, userId, siteUrl }).catch((err) => {
+        console.error("Report generation failed:", err);
+      });
     }, 0);
   }
 }

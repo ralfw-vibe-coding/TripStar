@@ -21,11 +21,18 @@ export const handler: BackgroundHandler = async (event: HandlerEvent) => {
   const { tripId, userId, siteUrl } = body;
   if (!tripId || !userId || !siteUrl) return;
 
-  await withUserId(userId, () =>
-    generateTripReport(
-      getStateProvider(),
-      createDocumentStorageProvider(),
-      { tripId, userId, siteUrl },
-    ),
-  );
+  try {
+    await withUserId(userId, () =>
+      generateTripReport(
+        getStateProvider(),
+        createDocumentStorageProvider(),
+        { tripId, userId, siteUrl },
+      ),
+    );
+  } catch (err) {
+    // generateTripReport already wrote a detailed failure entry to the
+    // activity log; this catch keeps the error visible in the Netlify
+    // function log and prevents an unhandled rejection.
+    console.error("generate-report-background failed:", err);
+  }
 };

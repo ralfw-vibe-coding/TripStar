@@ -20,6 +20,12 @@ export class R2DocumentStorageProvider implements DocumentStorageProvider {
         accessKeyId: options.accessKeyId,
         secretAccessKey: options.secretAccessKey,
       },
+      // The SDK default is no timeout at all — a single stalled socket would
+      // hang a report run forever. Fail fast and let the SDK retry instead.
+      requestHandler: {
+        connectionTimeout: 10_000,
+        requestTimeout: 60_000,
+      },
     });
   }
 

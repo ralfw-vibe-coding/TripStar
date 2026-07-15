@@ -55,9 +55,21 @@ function projectRoot(): string {
     process.env.TRIPSTAR_PROJECT_ROOT,
     process.env.PWD,
     process.env.INIT_CWD,
-    resolve(dirname(fileURLToPath(import.meta.url)), "../.."),
+    moduleDirCandidate(),
     process.cwd(),
   ].filter((candidate): candidate is string => Boolean(candidate));
 
   return candidates.find((candidate) => existsSync(join(candidate, "package.json"))) ?? process.cwd();
+}
+
+// import.meta.url is only meaningful in an ESM context. When this module ends
+// up in a CommonJS bundle (e.g. a static function-discovery pass), esbuild
+// replaces import.meta with an empty object, and fileURLToPath(undefined)
+// throws. Fall back to the other candidates instead of crashing.
+function moduleDirCandidate(): string | undefined {
+  try {
+    return resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+  } catch {
+    return undefined;
+  }
 }
