@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-01T07:02:32.934Z",
+  "updatedAt": "2026-07-15T08:46:13.337Z",
   "createdAt": "2026-04-29T10:19:00.365Z",
   "id": "oMQHdZ1oXg4q8Huv",
   "name": "TripCal - Email Ingest",
@@ -31,7 +31,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first();\nconst json = item.json ?? {};\nconst binary = item.binary ?? {};\n\nconst from = typeof json.from === 'object'\n  ? json.from.text || json.from.value?.[0]?.address || ''\n  : (json.from || '');\nconst senderMatch = from.match(/<([^>]+)>/) || from.match(/([^\\s<>]+@[^\\s<>]+)/);\nconst sender = senderMatch ? senderMatch[1].trim().toLowerCase() : from.trim().toLowerCase();\n\nconst txId = String(json.messageId || json.messageID || json.uid || `${json.date || Date.now()}-${json.subject || 'email'}`);\nconst text = json.textPlain || json.text || json.bodyText || '';\n\nconst parts = [];\n\nfunction fileNameOf(key, meta) {\n  return String(meta.fileName || meta.fileNameDecoded || key);\n}\n\nfunction isPdfAttachment(key, meta) {\n  return fileNameOf(key, meta).trim().toLowerCase().endsWith('.pdf');\n}\n\nif (String(text).trim().length > 0) {\n  parts.push({\n    filename: 'email-body.txt',\n    mimeType: 'text/plain',\n    data: Buffer.from(text).toString('base64'),\n  });\n}\n\nfor (const [key, meta] of Object.entries(binary)) {\n  if (!isPdfAttachment(key, meta)) continue;\n  const buffer = await this.helpers.getBinaryDataBuffer(0, key);\n  parts.push({\n    filename: fileNameOf(key, meta),\n    mimeType: 'application/pdf',\n    data: buffer.toString('base64'),\n  });\n}\n\nif (parts.length === 0) return [];\n\nconst of = parts.length;\nreturn parts.map((doc, i) => ({\n  json: {\n    txId,\n    part: i + 1,\n    of,\n    sender,\n    document: doc,\n  },\n}));"
+        "jsCode": "const item = $input.first();\nconst json = item.json ?? {};\nconst binary = item.binary ?? {};\n\nconst from = typeof json.from === 'object'\n  ? json.from.text || json.from.value?.[0]?.address || ''\n  : (json.from || '');\nconst senderMatch = from.match(/<([^>]+)>/) || from.match(/([^\\s<>]+@[^\\s<>]+)/);\nconst sender = senderMatch ? senderMatch[1].trim().toLowerCase() : from.trim().toLowerCase();\n\nconst txId = String(json.messageId || json.messageID || json.uid || `${json.date || Date.now()}-${json.subject || 'email'}`);\nconst text = json.textPlain || json.text || json.bodyText || '';\nconst subject = String(json.subject || '');\n\nconst parts = [];\n\nfunction fileNameOf(key, meta) {\n  return String(meta.fileName || meta.fileNameDecoded || key);\n}\n\nfunction isPdfAttachment(key, meta) {\n  return fileNameOf(key, meta).trim().toLowerCase().endsWith('.pdf');\n}\n\nif (String(text).trim().length > 0) {\n  parts.push({\n    filename: 'email-body.txt',\n    mimeType: 'text/plain',\n    data: Buffer.from(text).toString('base64'),\n  });\n}\n\nfor (const [key, meta] of Object.entries(binary)) {\n  if (!isPdfAttachment(key, meta)) continue;\n  const buffer = await this.helpers.getBinaryDataBuffer(0, key);\n  parts.push({\n    filename: fileNameOf(key, meta),\n    mimeType: 'application/pdf',\n    data: buffer.toString('base64'),\n  });\n}\n\nif (parts.length === 0) return [];\n\nconst of = parts.length;\nreturn parts.map((doc, i) => ({\n  json: {\n    txId,\n    part: i + 1,\n    of,\n    sender,\n    subject,\n    document: doc,\n  },\n}));"
       },
       "id": "5ef2c35c-a72f-4e6d-9e1e-b2eaa367ddc1",
       "name": "Normalize Email for TripCal",
@@ -216,7 +216,9 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
-    "availableInMCP": false
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
   },
   "staticData": {
     "node:Email Trigger": {}
@@ -225,9 +227,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
-  "activeVersionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
-  "versionCounter": 146,
+  "versionId": "38012e58-ef90-4a3e-b2e5-5eaf1dea3e87",
+  "activeVersionId": "38012e58-ef90-4a3e-b2e5-5eaf1dea3e87",
+  "versionCounter": 184,
   "triggerCount": 1,
   "shared": [
     {
@@ -250,9 +252,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-06-01T07:02:32.935Z",
-    "createdAt": "2026-06-01T07:02:32.935Z",
-    "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
+    "updatedAt": "2026-07-15T08:46:13.339Z",
+    "createdAt": "2026-07-15T08:46:13.339Z",
+    "versionId": "38012e58-ef90-4a3e-b2e5-5eaf1dea3e87",
     "workflowId": "oMQHdZ1oXg4q8Huv",
     "nodes": [
       {
@@ -279,7 +281,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const item = $input.first();\nconst json = item.json ?? {};\nconst binary = item.binary ?? {};\n\nconst from = typeof json.from === 'object'\n  ? json.from.text || json.from.value?.[0]?.address || ''\n  : (json.from || '');\nconst senderMatch = from.match(/<([^>]+)>/) || from.match(/([^\\s<>]+@[^\\s<>]+)/);\nconst sender = senderMatch ? senderMatch[1].trim().toLowerCase() : from.trim().toLowerCase();\n\nconst txId = String(json.messageId || json.messageID || json.uid || `${json.date || Date.now()}-${json.subject || 'email'}`);\nconst text = json.textPlain || json.text || json.bodyText || '';\n\nconst parts = [];\n\nfunction fileNameOf(key, meta) {\n  return String(meta.fileName || meta.fileNameDecoded || key);\n}\n\nfunction isPdfAttachment(key, meta) {\n  return fileNameOf(key, meta).trim().toLowerCase().endsWith('.pdf');\n}\n\nif (String(text).trim().length > 0) {\n  parts.push({\n    filename: 'email-body.txt',\n    mimeType: 'text/plain',\n    data: Buffer.from(text).toString('base64'),\n  });\n}\n\nfor (const [key, meta] of Object.entries(binary)) {\n  if (!isPdfAttachment(key, meta)) continue;\n  const buffer = await this.helpers.getBinaryDataBuffer(0, key);\n  parts.push({\n    filename: fileNameOf(key, meta),\n    mimeType: 'application/pdf',\n    data: buffer.toString('base64'),\n  });\n}\n\nif (parts.length === 0) return [];\n\nconst of = parts.length;\nreturn parts.map((doc, i) => ({\n  json: {\n    txId,\n    part: i + 1,\n    of,\n    sender,\n    document: doc,\n  },\n}));"
+          "jsCode": "const item = $input.first();\nconst json = item.json ?? {};\nconst binary = item.binary ?? {};\n\nconst from = typeof json.from === 'object'\n  ? json.from.text || json.from.value?.[0]?.address || ''\n  : (json.from || '');\nconst senderMatch = from.match(/<([^>]+)>/) || from.match(/([^\\s<>]+@[^\\s<>]+)/);\nconst sender = senderMatch ? senderMatch[1].trim().toLowerCase() : from.trim().toLowerCase();\n\nconst txId = String(json.messageId || json.messageID || json.uid || `${json.date || Date.now()}-${json.subject || 'email'}`);\nconst text = json.textPlain || json.text || json.bodyText || '';\nconst subject = String(json.subject || '');\n\nconst parts = [];\n\nfunction fileNameOf(key, meta) {\n  return String(meta.fileName || meta.fileNameDecoded || key);\n}\n\nfunction isPdfAttachment(key, meta) {\n  return fileNameOf(key, meta).trim().toLowerCase().endsWith('.pdf');\n}\n\nif (String(text).trim().length > 0) {\n  parts.push({\n    filename: 'email-body.txt',\n    mimeType: 'text/plain',\n    data: Buffer.from(text).toString('base64'),\n  });\n}\n\nfor (const [key, meta] of Object.entries(binary)) {\n  if (!isPdfAttachment(key, meta)) continue;\n  const buffer = await this.helpers.getBinaryDataBuffer(0, key);\n  parts.push({\n    filename: fileNameOf(key, meta),\n    mimeType: 'application/pdf',\n    data: buffer.toString('base64'),\n  });\n}\n\nif (parts.length === 0) return [];\n\nconst of = parts.length;\nreturn parts.map((doc, i) => ({\n  json: {\n    txId,\n    part: i + 1,\n    of,\n    sender,\n    subject,\n    document: doc,\n  },\n}));"
         },
         "id": "5ef2c35c-a72f-4e6d-9e1e-b2eaa367ddc1",
         "name": "Normalize Email for TripCal",
@@ -467,18 +469,18 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-06-01T07:02:33.018Z",
-        "id": 61,
+        "createdAt": "2026-07-15T08:46:13.414Z",
+        "id": 65,
         "workflowId": "oMQHdZ1oXg4q8Huv",
-        "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
+        "versionId": "38012e58-ef90-4a3e-b2e5-5eaf1dea3e87",
         "event": "deactivated",
         "userId": "23dff7ef-f296-4ade-a094-73bac4a1ec78"
       },
       {
-        "createdAt": "2026-06-01T07:02:33.203Z",
-        "id": 62,
+        "createdAt": "2026-07-15T08:46:13.581Z",
+        "id": 66,
         "workflowId": "oMQHdZ1oXg4q8Huv",
-        "versionId": "e3cec8d9-61f2-4c5f-98ea-ec8dc903de65",
+        "versionId": "38012e58-ef90-4a3e-b2e5-5eaf1dea3e87",
         "event": "activated",
         "userId": "23dff7ef-f296-4ade-a094-73bac4a1ec78"
       }

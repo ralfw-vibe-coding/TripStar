@@ -174,6 +174,9 @@ export interface IngestPart {
   part: number;
   of: number;
   sender: string;
+  /** Email subject line, if forwarded by the ingest pipeline. Optional for
+   *  backward compatibility with older payloads that omitted it. */
+  subject?: string | null;
   document: IngestPartDocument;
 }
 

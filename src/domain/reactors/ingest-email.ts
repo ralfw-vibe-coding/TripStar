@@ -1,5 +1,5 @@
 import type { DocumentRecord, IngestPart } from "../model";
-import type { AnalyzedBookingInput, BookingAnalysisProvider } from "../providers/booking-analysis-provider";
+import type { AnalyzedBookingInput, BookingAnalysisProvider, ReceiptInfo } from "../providers/booking-analysis-provider";
 import type { DocumentStorageProvider } from "../providers/document-storage-provider";
 import type { TripStarStateProvider } from "../providers/state-provider";
 import { withUserId } from "../providers/user-context";
@@ -118,6 +118,20 @@ export async function processIngestEmail(
 
     const hasPdf = sortedParts.some((p) => p.document.mimeType === "application/pdf");
 
+    // A "#reimburse" tag anywhere in the email subject marks every receipt in
+    // the email as reimbursable straight away, overriding the analyzer's guess.
+    const subject = sortedParts.find((p) => p.subject)?.subject ?? null;
+    const forceReimbursable = hasReimburseTag(subject);
+    if (forceReimbursable) {
+      await state.appendActivity({
+        level: "info",
+        scope: "inbox",
+        message: `[Inbox] "#reimburse" tag detected in subject — receipts will be marked reimbursable`,
+        documentName: null,
+        details: { txId, subject },
+      });
+    }
+
     const analyzedParts: Array<{ document: DocumentRecord; bookings: AnalyzedBookingInput[] }> = [];
     for (const p of sortedParts) {
       // When a PDF attachment is present it is the authoritative source.
@@ -135,7 +149,7 @@ export async function processIngestEmail(
       }
 
       try {
-        const result = await analyzeAndStorePart(state, storage, analyzer, p, sender, txId);
+        const result = await analyzeAndStorePart(state, storage, analyzer, p, sender, txId, forceReimbursable);
         analyzedParts.push(result);
         await state.appendActivity({
           level: "info",
@@ -204,6 +218,7 @@ async function analyzeAndStorePart(
   p: IngestPart,
   sender: string,
   txId: string,
+  forceReimbursable: boolean,
 ): Promise<{ document: DocumentRecord; bookings: AnalyzedBookingInput[] }> {
   if (p.document.mimeType === "text/plain") {
     const text = Buffer.from(p.document.data, "base64").toString("utf-8");
@@ -222,7 +237,7 @@ async function analyzeAndStorePart(
       receiptCurrency: receiptInfo.receiptCurrency,
       receiptDate: receiptInfo.receiptDate,
       receiptPurpose: receiptInfo.receiptPurpose,
-      receiptType: receiptInfo.receiptType,
+      receiptType: resolveReceiptType(receiptInfo, forceReimbursable),
       processingStatus: "ready",
     });
     return { document, bookings: deduplicateAnalyzedBookings(bookings) };
@@ -244,13 +259,31 @@ async function analyzeAndStorePart(
       receiptCurrency: receiptInfo.receiptCurrency,
       receiptDate: receiptInfo.receiptDate,
       receiptPurpose: receiptInfo.receiptPurpose,
-      receiptType: receiptInfo.receiptType,
+      receiptType: resolveReceiptType(receiptInfo, forceReimbursable),
       processingStatus: "ready",
     });
     return { document, bookings: deduplicateAnalyzedBookings(bookings) };
   }
 
   throw new Error(`Unsupported MIME type: ${p.document.mimeType}`);
+}
+
+/**
+ * True when the email subject carries a "#reimburse" / "#reimbursed" /
+ * "#reimbursement" hashtag. Matched case-insensitively as a standalone tag.
+ */
+export function hasReimburseTag(subject: string | null | undefined): boolean {
+  if (!subject) return false;
+  return /#reimburse(d|ment)?\b/i.test(subject);
+}
+
+/**
+ * The "#reimburse" subject tag only upgrades documents the analyzer already
+ * recognised as receipts — it never turns a non-receipt into one.
+ */
+function resolveReceiptType(receiptInfo: ReceiptInfo, forceReimbursable: boolean): DocumentRecord["receiptType"] {
+  if (forceReimbursable && receiptInfo.isReceipt) return "reimbursable";
+  return receiptInfo.receiptType;
 }
 
 /**
