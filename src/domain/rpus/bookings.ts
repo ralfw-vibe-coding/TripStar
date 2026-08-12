@@ -1,13 +1,30 @@
 import type { Booking, Id } from "../model";
 import type { TripStarStateProvider, UpdateBookingInput } from "../providers/state-provider";
 
+/**
+ * Only the owner of a booking's trip may edit it — sharing grants visibility,
+ * not write access. Bookings not yet assigned to a trip (inbox) stay open to
+ * whoever owns them there. This is the one place that rule is enforced; the
+ * provider just persists whatever it's told.
+ */
 export async function updateBooking(
   provider: TripStarStateProvider,
   id: Id,
+  currentUserId: Id,
   input: UpdateBookingInput,
 ): Promise<Booking> {
   if (input.title !== undefined && input.title.trim().length === 0) {
     throw new Error("Booking title is required.");
+  }
+  const booking = (await provider.listBookings()).find((candidate) => candidate.id === id);
+  if (!booking) {
+    throw new Error(`Booking not found: ${id}`);
+  }
+  if (booking.tripId !== null) {
+    const trip = (await provider.listTrips()).find((candidate) => candidate.id === booking.tripId);
+    if (trip && trip.ownerUserId !== currentUserId) {
+      throw new Error("Only the trip owner can edit bookings on this trip.");
+    }
   }
   return provider.updateBooking(id, input);
 }

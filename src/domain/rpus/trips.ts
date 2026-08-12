@@ -29,11 +29,24 @@ function formatTripNumber(n: number): string {
   return String(n).padStart(3, "0");
 }
 
+/**
+ * Only the trip owner may edit a trip — sharing grants visibility, not write
+ * access. This is the one place that rule is enforced; the provider just
+ * persists whatever it's told.
+ */
 export async function updateTrip(
   provider: TripStarStateProvider,
   id: Id,
+  currentUserId: Id,
   input: UpdateTripInput,
 ): Promise<Trip> {
+  const trip = (await provider.listTrips()).find((t) => t.id === id);
+  if (!trip) {
+    throw new Error(`Trip not found: ${id}`);
+  }
+  if (trip.ownerUserId !== currentUserId) {
+    throw new Error("Only the trip owner can edit this trip.");
+  }
   if (input.startDate && input.endDate) {
     validateTripDates(input.startDate, input.endDate);
   }

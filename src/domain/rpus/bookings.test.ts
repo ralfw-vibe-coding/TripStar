@@ -71,7 +71,31 @@ describe("booking RPUs", () => {
   it("validates title updates", async () => {
     const provider = new LocalStateProvider({ bookings: [booking] });
 
-    await expect(updateBooking(provider, "booking_1", { title: "" })).rejects.toThrow("title");
+    await expect(updateBooking(provider, "booking_1", "user_ralf", { title: "" })).rejects.toThrow("title");
+  });
+
+  it("allows the trip owner to update a booking assigned to their trip", async () => {
+    const provider = new LocalStateProvider({ trips: [trip], bookings: [{ ...booking, tripId: "trip_200" }] });
+
+    const updated = await updateBooking(provider, "booking_1", "user_ralf", { title: "Updated" });
+
+    expect(updated.title).toBe("Updated");
+  });
+
+  it("rejects booking edits from anyone but the trip owner — sharing grants visibility, not write access", async () => {
+    const provider = new LocalStateProvider({ trips: [trip], bookings: [{ ...booking, tripId: "trip_200" }] });
+
+    await expect(
+      updateBooking(provider, "booking_1", "user_someone_shared_with", { title: "Hijacked" }),
+    ).rejects.toThrow("Only the trip owner can edit bookings on this trip.");
+  });
+
+  it("allows anyone to update a booking not yet assigned to a trip", async () => {
+    const provider = new LocalStateProvider({ bookings: [booking] });
+
+    const updated = await updateBooking(provider, "booking_1", "user_someone_else", { title: "Updated" });
+
+    expect(updated.title).toBe("Updated");
   });
 
   it("assigns a booking to a trip", async () => {

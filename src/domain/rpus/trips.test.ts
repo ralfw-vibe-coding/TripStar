@@ -44,7 +44,7 @@ describe("trip RPUs", () => {
 
   it("updates trips through the provider", async () => {
     const provider = new LocalStateProvider({ trips: [trip] });
-    const updated = await updateTrip(provider, "trip_200", { title: "Updated Trip" });
+    const updated = await updateTrip(provider, "trip_200", "user_ralf", { title: "Updated Trip" });
 
     expect(updated.title).toBe("Updated Trip");
   });
@@ -54,11 +54,19 @@ describe("trip RPUs", () => {
 
     await expect(listTrips(provider)).resolves.toHaveLength(1);
     await expect(
-      updateTrip(provider, "trip_200", {
+      updateTrip(provider, "trip_200", "user_ralf", {
         startDate: "2026-08-10",
         endDate: "2026-08-09",
       }),
     ).rejects.toThrow("end date");
+  });
+
+  it("rejects trip edits from anyone but the owner — sharing grants visibility, not write access", async () => {
+    const provider = new LocalStateProvider({ trips: [trip] });
+
+    await expect(
+      updateTrip(provider, "trip_200", "user_someone_shared_with", { title: "Hijacked" }),
+    ).rejects.toThrow("Only the trip owner can edit this trip.");
   });
 
   it("archives and restores only trips owned by the user", async () => {

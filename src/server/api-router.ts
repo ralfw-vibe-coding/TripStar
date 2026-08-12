@@ -144,7 +144,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
 
       if (request.method === "PATCH" && segments.length === 2) {
-        return jsonResponse(await updateTrip(provider, segments[1], await readJson<UpdateTripInput>(request)));
+        if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        return jsonResponse(await updateTrip(provider, segments[1], currentUserId, await readJson<UpdateTripInput>(request)));
       }
 
       if (request.method === "POST" && segments.length === 3 && segments[2] === "archive") {
@@ -194,7 +195,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
 
       if (request.method === "PATCH" && segments.length === 2) {
-        return jsonResponse(await updateBooking(provider, segments[1], await readJson<UpdateBookingInput>(request)));
+        if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
+        return jsonResponse(await updateBooking(provider, segments[1], currentUserId, await readJson<UpdateBookingInput>(request)));
       }
 
       if (request.method === "PATCH" && segments.length === 3 && segments[2] === "trip") {

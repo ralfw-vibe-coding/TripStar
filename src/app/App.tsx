@@ -879,9 +879,11 @@ function TripList({ title, trips, users, currentUserId, onEdit }: { title: strin
                 <span className="trip-row-dates">
                   {shortDate(trip.startDate)}-{shortDate(trip.endDate)}
                 </span>
-                <button className="trip-edit-button" type="button" aria-label={`Edit ${trip.title}`} onClick={() => onEdit(trip)}>
-                  <Pencil size={14} />
-                </button>
+                {trip.ownerUserId === currentUserId && (
+                  <button className="trip-edit-button" type="button" aria-label={`Edit ${trip.title}`} onClick={() => onEdit(trip)}>
+                    <Pencil size={14} />
+                  </button>
+                )}
               </article>
             );
           })
@@ -1678,6 +1680,10 @@ function BookingCard({
   const fullTrip = visibleTrips.find((trip) => trip.id === booking.tripId) ?? null;
   const draftTrip = visibleTrips.find((trip) => trip.id === draft.tripId) ?? null;
   const allowedUsers = allowedParticipantUsers(draftTrip, users, currentUserId);
+  // Sharing a trip grants visibility, not write access — bookings not yet assigned
+  // to a trip stay editable by whoever can see them (matches the domain rule in
+  // domain/rpus/bookings.ts).
+  const isOwnTrip = booking.tripId === null || fullTrip?.ownerUserId === currentUserId;
 
   useEffect(() => {
     setDraft(bookingDraftFromBooking(booking));
@@ -1801,6 +1807,10 @@ function BookingCard({
 
       {expandedBookingId === booking.id && (
         <div className="booking-details">
+          {!isOwnTrip && (
+            <p className="muted-small">You can view this booking, but only {fullTrip?.title ?? "the trip's owner"} can edit it.</p>
+          )}
+          <fieldset disabled={!isOwnTrip} style={{ display: "contents", border: 0, margin: 0, padding: 0 }}>
           <div className="booking-edit-grid">
             <label className="field-label">
               Type *
@@ -1861,8 +1871,10 @@ function BookingCard({
             selectedUserIds={draft.participantUserIds}
             onChange={(participantUserIds) => setDraft({ ...draft, participantUserIds })}
           />
+          </fieldset>
 
           <div className="detail-actions">
+            <fieldset disabled={!isOwnTrip} style={{ display: "contents", border: 0, margin: 0, padding: 0 }}>
             <div className="booking-save-area">
               {draftError && <div className="inline-error">{draftError}</div>}
               <button type="button" className="primary-button" onClick={saveDraft} disabled={!draftDirty || isSavingDraft}>
@@ -1903,6 +1915,7 @@ function BookingCard({
                 </select>
               )}
             </label>
+          </fieldset>
             {booking.sourceDocumentId && (
               <button type="button" className="secondary-button document-link" onClick={() => onOpenDocument(booking.sourceDocumentId!)}>
                 <FileUp size={16} />

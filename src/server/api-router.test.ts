@@ -247,20 +247,40 @@ describe("API router", () => {
     const tripResponse = await handleApiRequest(
       new Request("http://localhost/api/trips/trip_200", {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...authHeader },
         body: JSON.stringify({ title: "Trip Updated" }),
       }),
     );
     const bookingResponse = await handleApiRequest(
       new Request("http://localhost/api/bookings/booking_1", {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...authHeader },
         body: JSON.stringify({ title: "Hotel Updated" }),
       }),
     );
 
     await expect(tripResponse.json()).resolves.toMatchObject({ title: "Trip Updated" });
     await expect(bookingResponse.json()).resolves.toMatchObject({ title: "Hotel Updated" });
+  });
+
+  it("rejects trip and booking updates without a valid session", async () => {
+    const tripResponse = await handleApiRequest(
+      new Request("http://localhost/api/trips/trip_200", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Hijacked" }),
+      }),
+    );
+    const bookingResponse = await handleApiRequest(
+      new Request("http://localhost/api/bookings/booking_1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Hijacked" }),
+      }),
+    );
+
+    expect(tripResponse.status).toBe(401);
+    expect(bookingResponse.status).toBe(401);
   });
 
   it("deletes bookings through DELETE /api/bookings/:id", async () => {
