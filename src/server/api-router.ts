@@ -2,7 +2,7 @@ import { assignBookingToTrip, deleteBooking, updateBooking } from "../domain/rpu
 import { getCurrentUser, requestLoginOtp, verifyLoginOtp } from "../domain/rpus/auth";
 import { getCalendar } from "../domain/rpus/calendar";
 import { deleteDirectDocument, listDocumentsForUser, uploadDocument, type UploadDocumentInput } from "../domain/rpus/documents";
-import { archiveTrip, createTrip, listArchivedTrips, listTrips, unarchiveTrip, updateTrip } from "../domain/rpus/trips";
+import { archiveTrip, createTrip, listArchivedTrips, listTrips, suggestNextTripNumber, unarchiveTrip, updateTrip } from "../domain/rpus/trips";
 import { getStateProvider } from "../domain/provider-factory";
 import type { CreateTripInput, UpdateBookingInput, UpdateDocumentInput, UpdateTripInput } from "../domain/providers/state-provider";
 
@@ -133,6 +133,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       if (request.method === "GET" && segments.length === 2 && segments[1] === "archive") {
         if (!currentUserId) return jsonResponse({ error: "Authentication required." }, { status: 401 });
         return jsonResponse(await listArchivedTrips(provider, currentUserId));
+      }
+
+      if (request.method === "GET" && segments.length === 2 && segments[1] === "next-number") {
+        return jsonResponse({ tripNumber: await suggestNextTripNumber(provider) });
       }
 
       if (request.method === "POST" && segments.length === 1) {

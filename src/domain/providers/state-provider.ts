@@ -145,6 +145,8 @@ export interface TripStarStateProvider {
 
   listTrips(): Promise<Trip[]>;
   listArchivedTrips(ownerUserId: Id): Promise<Trip[]>;
+  /** Highest trip number currently in use across ALL trips company-wide (active + archived); 0 if none exist. Purely a state query — number-generation rules live in the domain layer. */
+  currentMaxTripNumber(): Promise<number>;
   createTrip(input: CreateTripInput): Promise<Trip>;
   updateTrip(id: Id, input: UpdateTripInput): Promise<Trip>;
   archiveTrip(id: Id, ownerUserId: Id): Promise<Trip>;

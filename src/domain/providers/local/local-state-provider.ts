@@ -45,7 +45,6 @@ interface LocalStateProviderOptions {
   otpChallenges?: OtpChallenge[];
   ingestEmailAddresses?: IngestEmailAddress[];
   authSessions?: AuthSession[];
-  initialTripNumber?: number;
   now?: () => Date;
   stateFilePath?: string;
 }
@@ -83,7 +82,6 @@ export class LocalStateProvider implements TripStarStateProvider {
   private ingestParts: Map<string, Array<{ part: IngestPart; receivedAt: Date }>> = new Map();
   private now: () => Date;
   private stateFilePath: string | null;
-  private initialTripNumber: number;
 
   constructor(options: LocalStateProviderOptions = {}) {
     const persisted = options.stateFilePath ? this.readPersistedState(options.stateFilePath) : null;
@@ -98,7 +96,6 @@ export class LocalStateProvider implements TripStarStateProvider {
     this.authSessions = clone(options.authSessions ?? persisted?.authSessions ?? []);
     this.now = options.now ?? (() => new Date());
     this.stateFilePath = options.stateFilePath ?? null;
-    this.initialTripNumber = options.initialTripNumber ?? 200;
     this.ensurePrimaryIngestEmails();
   }
 
@@ -327,7 +324,10 @@ export class LocalStateProvider implements TripStarStateProvider {
 
   async createTrip(input: CreateTripInput): Promise<Trip> {
     const timestamp = isoDate(this.now());
-    const tripNumber = input.tripNumber ?? this.nextTripNumber();
+    const tripNumber = input.tripNumber;
+    if (!tripNumber) {
+      throw new Error("tripNumber is required — resolve it via suggestNextTripNumber() before calling createTrip().");
+    }
     if (this.trips.some((t) => t.tripNumber === tripNumber)) {
       throw new Error(`Trip number ${tripNumber} is already in use.`);
     }
@@ -757,12 +757,12 @@ export class LocalStateProvider implements TripStarStateProvider {
     return job;
   }
 
-  private nextTripNumber(): string {
+  async currentMaxTripNumber(): Promise<number> {
+    // All trips company-wide, including archived — matches the uniqueness check in createTrip.
     const numbers = this.trips
       .map((trip) => Number.parseInt(trip.tripNumber, 10))
       .filter((number) => Number.isFinite(number));
-    const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : this.initialTripNumber;
-    return String(nextNumber).padStart(3, "0");
+    return numbers.length > 0 ? Math.max(...numbers) : 0;
   }
 
   private startOfDay(date: Date): Date {

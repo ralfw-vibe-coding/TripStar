@@ -20,16 +20,13 @@ export function getStateProvider(): TripStarStateProvider {
     if (!connectionString) {
       throw new Error("DATABASE_URL is required for remote state provider.");
     }
-    const provider = new PostgresStateProvider(connectionString, {
-      initialTripNumber: parseInitialTripNumber(process.env.INITIAL_TRIP_NUMBER),
-    });
+    const provider = new PostgresStateProvider(connectionString);
     globalThis.__tripstarStateProvider = provider;
     return provider;
   }
 
   const localPersistenceDir = process.env.LOCAL_PERSISTENCE_DIR ?? "./data";
   const provider = new LocalStateProvider({
-    initialTripNumber: parseInitialTripNumber(process.env.INITIAL_TRIP_NUMBER),
     stateFilePath: join(resolveLocalPersistenceDir(localPersistenceDir), "state", "tripstar-state.json"),
   });
   globalThis.__tripstarStateProvider = provider;
@@ -38,19 +35,6 @@ export function getStateProvider(): TripStarStateProvider {
 
 export function setStateProviderForTests(provider: TripStarStateProvider | null): void {
   globalThis.__tripstarStateProvider = provider;
-}
-
-function parseInitialTripNumber(value: string | undefined): number {
-  if (!value) {
-    return 200;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    throw new Error("INITIAL_TRIP_NUMBER must be a positive integer.");
-  }
-
-  return parsed;
 }
 
 function resolveLocalPersistenceDir(localPersistenceDir: string): string {

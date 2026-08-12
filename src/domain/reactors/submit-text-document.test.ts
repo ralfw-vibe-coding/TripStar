@@ -67,6 +67,7 @@ describe("submitTextDocument", () => {
   it("stores a text document and creates associated bookings", async () => {
     const state = new LocalStateProvider({ now: () => new Date("2026-05-26T09:00:00.000Z") });
     const trip = await state.createTrip({
+      tripNumber: "200",
       title: "Berlin",
       startDate: "2026-07-01",
       endDate: "2026-07-02",

@@ -64,6 +64,11 @@ export function fetchArchivedTrips(): Promise<Trip[]> {
   return requestJson<Trip[]>("/api/trips/archive");
 }
 
+export async function fetchNextTripNumber(): Promise<string> {
+  const { tripNumber } = await requestJson<{ tripNumber: string }>("/api/trips/next-number");
+  return tripNumber;
+}
+
 export function archiveTrip(tripId: string): Promise<Trip> {
   return requestJson<Trip>(`/api/trips/${tripId}/archive`, { method: "POST", body: JSON.stringify({}) });
 }

@@ -65,6 +65,7 @@ describe("submitPdfDocuments", () => {
   it("stores multiple PDFs and assigns extracted bookings to the selected trip", async () => {
     const state = new LocalStateProvider({ now: () => new Date("2026-05-26T09:00:00.000Z") });
     const trip = await state.createTrip({
+      tripNumber: "200",
       title: "Hamburg",
       startDate: "2026-07-01",
       endDate: "2026-07-03",

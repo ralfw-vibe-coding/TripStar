@@ -57,6 +57,7 @@ import {
   fetchDocumentOriginal,
   fetchDocuments,
   fetchIngestEmailAddresses,
+  fetchNextTripNumber,
   getStoredAuthToken,
   logout,
   requestOtp,
@@ -105,6 +106,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [isTripDialogOpen, setIsTripDialogOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [suggestedTripNumber, setSuggestedTripNumber] = useState("");
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
@@ -623,7 +625,18 @@ export function App() {
         <section className="trip-list-panel">
           <header className="panel-header">
             <h2>Trips</h2>
-            <button className="icon-command" type="button" aria-label="Create trip" onClick={() => setIsTripDialogOpen(true)}>
+            <button
+              className="icon-command"
+              type="button"
+              aria-label="Create trip"
+              onClick={() => {
+                setSuggestedTripNumber("");
+                void fetchNextTripNumber()
+                  .then(setSuggestedTripNumber)
+                  .catch(() => undefined);
+                setIsTripDialogOpen(true);
+              }}
+            >
               <Plus size={18} />
             </button>
           </header>
@@ -690,7 +703,7 @@ export function App() {
       {isTripDialogOpen && view && (
         <TripDialog
           users={view.users}
-          allTrips={view.trips}
+          suggestedTripNumber={suggestedTripNumber}
           currentUserId={currentUser.id}
           trip={editingTrip}
           onClose={() => {
@@ -2565,7 +2578,7 @@ async function pdfFileToPayload(file: File): Promise<{ name: string; size: numbe
 
 function TripDialog({
   users,
-  allTrips,
+  suggestedTripNumber,
   currentUserId,
   trip,
   onClose,
@@ -2574,7 +2587,8 @@ function TripDialog({
   isSubmitting,
 }: {
   users: User[];
-  allTrips: Trip[];
+  /** Next free trip number company-wide, fetched from the server; empty while loading. Ignored when editing. */
+  suggestedTripNumber: string;
   currentUserId: string;
   trip: Trip | null;
   onClose: () => void;
@@ -2584,13 +2598,6 @@ function TripDialog({
 }) {
   const isEditing = trip !== null;
   const canArchive = isEditing && trip.ownerUserId === currentUserId && onArchive !== undefined;
-  const suggestedTripNumber = useMemo(() => {
-    const nums = allTrips
-      .map((t) => Number.parseInt(t.tripNumber, 10))
-      .filter((n) => Number.isFinite(n));
-    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-    return String(next).padStart(3, "0");
-  }, [allTrips]);
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -2612,9 +2619,11 @@ function TripDialog({
           <label className="field-label">
             Number *
             <input
+              key={isEditing ? trip.tripNumber : suggestedTripNumber}
               name="tripNumber"
               required
               defaultValue={isEditing ? trip.tripNumber : suggestedTripNumber}
+              placeholder={isEditing || suggestedTripNumber ? undefined : "Loading…"}
               style={{ fontVariantNumeric: "tabular-nums" }}
             />
           </label>

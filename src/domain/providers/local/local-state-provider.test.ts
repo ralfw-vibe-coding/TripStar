@@ -68,6 +68,7 @@ describe("LocalStateProvider", () => {
 
     const trip = await withUserId("test-user", () =>
       provider.createTrip({
+        tripNumber: "200",
         title: "Berlin Workshop",
         ownerUserId: "user_ralf",
         startDate: "2026-07-01",
@@ -86,10 +87,11 @@ describe("LocalStateProvider", () => {
     await expect(provider.listActivity("test-user")).resolves.toHaveLength(1);
   });
 
-  it("uses the generated trip number as title when no title is provided", async () => {
+  it("uses the trip number as title when no title is provided", async () => {
     const provider = new LocalStateProvider({ now: () => fixedNow });
 
     const trip = await provider.createTrip({
+      tripNumber: "200",
       title: "   ",
       ownerUserId: "user_ralf",
       startDate: "2026-07-01",
@@ -100,6 +102,21 @@ describe("LocalStateProvider", () => {
 
     expect(trip.tripNumber).toBe("200");
     expect(trip.title).toBe("#200");
+  });
+
+  it("requires a resolved tripNumber — number generation is a domain concern, not a provider one", async () => {
+    const provider = new LocalStateProvider({ now: () => fixedNow });
+
+    await expect(
+      provider.createTrip({
+        title: "Berlin",
+        ownerUserId: "user_ralf",
+        startDate: "2026-07-01",
+        endDate: "2026-07-03",
+        places: "Berlin",
+        sharedWithUserIds: [],
+      }),
+    ).rejects.toThrow("tripNumber is required");
   });
 
   it("returns cloned state so callers cannot mutate provider internals", async () => {
@@ -207,10 +224,11 @@ describe("LocalStateProvider", () => {
     expect(trips[0]).toMatchObject({ id: "trip_201", title: "Kept duplicate" });
   });
 
-  it("keeps trip numbers increasing across persisted local provider instances", async () => {
+  it("reflects trips persisted by an earlier provider instance in currentMaxTripNumber", async () => {
     const stateFilePath = join(mkdtempSync(join(tmpdir(), "tripstar-state-")), "local-state.json");
     const firstProvider = new LocalStateProvider({ now: () => fixedNow, stateFilePath });
-    const firstTrip = await firstProvider.createTrip({
+    await firstProvider.createTrip({
+      tripNumber: "200",
       title: "Alpha",
       ownerUserId: "user_ralf",
       startDate: "2026-07-01",
@@ -220,23 +238,14 @@ describe("LocalStateProvider", () => {
     });
 
     const secondProvider = new LocalStateProvider({ now: () => fixedNow, stateFilePath });
-    const secondTrip = await secondProvider.createTrip({
-      title: "Beta",
-      ownerUserId: "user_ralf",
-      startDate: "2026-07-03",
-      endDate: "2026-07-04",
-      places: "Beta",
-      sharedWithUserIds: [],
-    });
-
-    expect(firstTrip.tripNumber).toBe("200");
-    expect(secondTrip.tripNumber).toBe("201");
+    await expect(secondProvider.currentMaxTripNumber()).resolves.toBe(200);
   });
 
   it("backs up local state before overwriting it", async () => {
     const stateFilePath = join(mkdtempSync(join(tmpdir(), "tripstar-state-")), "state", "tripstar-state.json");
     const provider = new LocalStateProvider({ now: () => fixedNow, stateFilePath });
     await provider.createTrip({
+      tripNumber: "200",
       title: "Alpha",
       ownerUserId: "user_ralf",
       startDate: "2026-07-01",
@@ -245,6 +254,7 @@ describe("LocalStateProvider", () => {
       sharedWithUserIds: [],
     });
     await provider.createTrip({
+      tripNumber: "201",
       title: "Beta",
       ownerUserId: "user_ralf",
       startDate: "2026-07-03",
@@ -258,24 +268,10 @@ describe("LocalStateProvider", () => {
     expect(readdirSync(backupDir).some((file) => file.startsWith("tripstar-state."))).toBe(true);
   });
 
-  it("uses configured initial trip number when no trips exist", async () => {
-    const provider = new LocalStateProvider({
-      now: () => fixedNow,
-      trips: [],
-      initialTripNumber: 98,
-    });
+  it("reports 0 as the current max trip number when no trips exist", async () => {
+    const provider = new LocalStateProvider({ now: () => fixedNow, trips: [] });
 
-    const trip = await provider.createTrip({
-      title: "",
-      ownerUserId: "user_ralf",
-      startDate: "2026-07-01",
-      endDate: "2026-07-02",
-      places: "Berlin",
-      sharedWithUserIds: [],
-    });
-
-    expect(trip.tripNumber).toBe("098");
-    expect(trip.title).toBe("#098");
+    await expect(provider.currentMaxTripNumber()).resolves.toBe(0);
   });
 
   it("creates users and sessions through local OTP auth", async () => {

@@ -48,7 +48,7 @@ export class PostgresStateProvider implements TripStarStateProvider {
 
   constructor(
     connectionString: string,
-    private readonly options: { initialTripNumber?: number; now?: () => Date } = {},
+    private readonly options: { now?: () => Date } = {},
   ) {
     this.sql = neon(connectionString);
     this.ready = this.ensureSchema();
@@ -324,7 +324,10 @@ export class PostgresStateProvider implements TripStarStateProvider {
   async createTrip(input: CreateTripInput): Promise<Trip> {
     await this.ready;
     const timestamp = this.nowIso();
-    const tripNumber = input.tripNumber ?? await this.nextTripNumber();
+    const tripNumber = input.tripNumber;
+    if (!tripNumber) {
+      throw new Error("tripNumber is required — resolve it via suggestNextTripNumber() before calling createTrip().");
+    }
     const conflict = await this.sql`select id from trips where trip_number = ${tripNumber}`;
     if (conflict.length > 0) {
       throw new Error(`Trip number ${tripNumber} is already in use.`);
@@ -950,11 +953,13 @@ export class PostgresStateProvider implements TripStarStateProvider {
     }
   }
 
-  private async nextTripNumber(): Promise<string> {
-    const rows = await this.sql`select max((trip_number)::int) as max_trip_number from trips`;
+  // All trips company-wide, including archived — matches the uniqueness check in createTrip.
+  // Filtered to numeric trip_number values so one non-numeric legacy value can't break the max() cast for everyone.
+  async currentMaxTripNumber(): Promise<number> {
+    await this.ready;
+    const rows = await this.sql`select max((trip_number)::int) as max_trip_number from trips where trip_number ~ '^[0-9]+$'`;
     const current = rows[0]?.max_trip_number;
-    const nextNumber = current === null || current === undefined ? this.options.initialTripNumber ?? 200 : Number(current) + 1;
-    return String(nextNumber).padStart(3, "0");
+    return current === null || current === undefined ? 0 : Number(current);
   }
 
   private now(): Date {
